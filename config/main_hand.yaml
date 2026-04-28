@@ -1,0 +1,27 @@
+robot_name: main_hand
+
+can_buses:
+  m3508_bus: can0
+  edulite_bus: can1
+  generic_bus: can2
+
+motors:
+  # DJI M3508 (C620 ESC) — CAN Standard Frame
+  # lift_motor:
+  #   driver: m3508
+  #   bus: m3508_bus
+  #   can_id: 1
+
+  # RobStride EDULITE 05 — CAN Extended Frame
+  # arm_joint:
+  #   driver: edulite05
+  #   bus: edulite_bus
+  #   can_id: 1
+  #   mode: position
+
+  # 自作モータドライバ — CAN Standard Frame
+  # gripper:
+  #   driver: generic
+  #   bus: generic_bus
+  #   can_id: 0x01
+  #   control_type: position
