@@ -1,10 +1,8 @@
-import { Link as RouterLink } from "react-router-dom";
 import { Skeleton } from "@heroui/react";
 import { useRobot } from "../context/RobotContext";
-import { ConnectionStatus } from "../components/ConnectionStatus";
+import { AppHeader } from "../components/AppHeader";
 import { SequenceProgress } from "../components/SequenceProgress";
 import { MotorSummary } from "../components/MotorSummary";
-import { EStopButton } from "../components/EStopButton";
 import { EStopOverlay } from "../components/EStopOverlay";
 
 interface DashboardProps {
@@ -22,16 +20,8 @@ export function Dashboard({ eStopActive, onEStop, onEStopRelease }: DashboardPro
   const { states, connected } = useRobot();
 
   return (
-    <div className="flex min-h-screen flex-col bg-white pb-24">
-      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-        <h1 className="text-3xl font-black text-gray-900">CBC2026 Team3 Dashboard</h1>
-        <div className="flex items-center gap-4">
-          <RouterLink to="/motors" className="text-sm text-gray-400 hover:text-gray-600">
-            モータ詳細 →
-          </RouterLink>
-          <ConnectionStatus connected={connected} />
-        </div>
-      </header>
+    <div className="flex min-h-screen flex-col bg-white">
+      <AppHeader title="CBC2026 Team3 Dashboard" connected={connected} onEStop={onEStop} />
 
       <main className="grid flex-1 grid-cols-1 gap-0 md:grid-cols-2">
         {ROBOTS.map(({ key, label }) => {
@@ -68,7 +58,6 @@ export function Dashboard({ eStopActive, onEStop, onEStopRelease }: DashboardPro
         })}
       </main>
 
-      <EStopButton onStop={onEStop} />
       <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
     </div>
   );

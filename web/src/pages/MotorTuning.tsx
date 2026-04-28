@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
 import { Button, Card, Skeleton, Slider } from "@heroui/react";
 import { useRobot } from "../context/RobotContext";
-import { ConnectionStatus } from "../components/ConnectionStatus";
+import { AppHeader } from "../components/AppHeader";
 import { MotorStatus } from "../components/MotorStatus";
-import { EStopButton } from "../components/EStopButton";
 import { EStopOverlay } from "../components/EStopOverlay";
 
 interface MotorTuningProps {
@@ -44,16 +42,8 @@ export function MotorTuning({ eStopActive, onEStop, onEStopRelease }: MotorTunin
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-white pb-24">
-      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center gap-4">
-          <RouterLink to="/" className="text-sm text-gray-400 hover:text-gray-600">
-            ← Dashboard
-          </RouterLink>
-          <h1 className="text-2xl font-black text-gray-900">モータ調整</h1>
-        </div>
-        <ConnectionStatus connected={connected} />
-      </header>
+    <div className="flex min-h-screen flex-col bg-white">
+      <AppHeader title="モータ調整" connected={connected} onEStop={onEStop} />
 
       <main className="mx-auto w-full max-w-5xl space-y-10 px-6 py-6">
         {ROBOTS.map(({ key, label }) => {
@@ -126,7 +116,6 @@ export function MotorTuning({ eStopActive, onEStop, onEStopRelease }: MotorTunin
         })}
       </main>
 
-      <EStopButton onStop={onEStop} />
       <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
     </div>
   );

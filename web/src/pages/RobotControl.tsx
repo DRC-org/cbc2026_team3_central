@@ -1,11 +1,9 @@
-import { Link as RouterLink } from "react-router-dom";
 import { Skeleton } from "@heroui/react";
 import { useRobot } from "../context/RobotContext";
-import { ConnectionStatus } from "../components/ConnectionStatus";
+import { AppHeader } from "../components/AppHeader";
 import { SequenceProgress } from "../components/SequenceProgress";
 import { TriggerButton } from "../components/TriggerButton";
 import { MotorSummary } from "../components/MotorSummary";
-import { EStopButton } from "../components/EStopButton";
 import { EStopOverlay } from "../components/EStopOverlay";
 
 interface RobotControlProps {
@@ -31,16 +29,8 @@ export function RobotControl({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-white pb-24">
-      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-        <h1 className="text-3xl font-black text-gray-900">{label}</h1>
-        <div className="flex items-center gap-4">
-          <RouterLink to="/motors" className="text-sm text-gray-400 hover:text-gray-600">
-            モータ詳細 →
-          </RouterLink>
-          <ConnectionStatus connected={connected} />
-        </div>
-      </header>
+    <div className="flex min-h-screen flex-col bg-white">
+      <AppHeader title={label} connected={connected} onEStop={onEStop} />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-6">
         {state ? (
@@ -75,7 +65,6 @@ export function RobotControl({
         )}
       </main>
 
-      <EStopButton onStop={onEStop} />
       <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
     </div>
   );
