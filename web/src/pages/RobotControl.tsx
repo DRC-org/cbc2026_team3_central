@@ -1,80 +1,82 @@
-import { useParams, Link as RouterLink } from "react-router-dom";
-import { Button } from "@heroui/react";
+import { Link as RouterLink } from "react-router-dom";
+import { Skeleton } from "@heroui/react";
 import { useRobot } from "../context/RobotContext";
+import { ConnectionStatus } from "../components/ConnectionStatus";
 import { SequenceProgress } from "../components/SequenceProgress";
 import { TriggerButton } from "../components/TriggerButton";
-import { MotorStatus } from "../components/MotorStatus";
+import { MotorSummary } from "../components/MotorSummary";
+import { EStopButton } from "../components/EStopButton";
+import { EStopOverlay } from "../components/EStopOverlay";
 
-const ROBOT_MAP: Record<string, string> = {
-  "main-hand": "main_hand",
-  "sub-hand": "sub_hand",
-};
+interface RobotControlProps {
+  robotKey: string;
+  label: string;
+  eStopActive: boolean;
+  onEStop: () => void;
+  onEStopRelease: () => void;
+}
 
-const LABEL_MAP: Record<string, string> = {
-  "main-hand": "メインハンド",
-  "sub-hand": "サブハンド",
-};
-
-export function RobotControl() {
-  const { states, send } = useRobot();
-  const { robotName } = useParams<{ robotName: string }>();
-  const robotKey = ROBOT_MAP[robotName ?? ""] ?? robotName ?? "";
+export function RobotControl({
+  robotKey,
+  label,
+  eStopActive,
+  onEStop,
+  onEStopRelease,
+}: RobotControlProps) {
+  const { states, connected, send } = useRobot();
   const state = states[robotKey];
-  const label = LABEL_MAP[robotName ?? ""] ?? robotName;
 
   const handleTrigger = () => {
     send({ type: "trigger", robot: robotKey });
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <RouterLink to="/">
-          <Button variant="ghost" size="sm">
-            ← 戻る
-          </Button>
-        </RouterLink>
-        <h1 className="text-2xl font-bold text-gray-900">{label}</h1>
-        <RouterLink to={`/${robotName}/motors`} className="ml-auto">
-          <Button variant="ghost" size="sm">
-            モータ調整 →
-          </Button>
-        </RouterLink>
-      </div>
+    <div className="flex min-h-screen flex-col bg-white pb-24">
+      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+        <h1 className="text-3xl font-black text-gray-900">{label}</h1>
+        <div className="flex items-center gap-4">
+          <RouterLink to="/motors" className="text-sm text-gray-400 hover:text-gray-600">
+            モータ詳細 →
+          </RouterLink>
+          <ConnectionStatus connected={connected} />
+        </div>
+      </header>
 
-      {!state ? (
-        <p className="text-gray-400">データ未受信</p>
-      ) : (
-        <>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-6">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-6">
+        {state ? (
+          <>
             <SequenceProgress
               sequence={state.sequence}
               currentStep={state.current_step}
               stepIndex={state.step_index}
               totalSteps={state.total_steps}
               waitingTrigger={state.waiting_trigger}
+              large
             />
-          </div>
 
-          <div className="flex justify-center py-4">
-            <TriggerButton
-              waiting={state.waiting_trigger}
-              onTrigger={handleTrigger}
-            />
-          </div>
-
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-gray-700">
-              モータ状態
-            </h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(state.motors).map(([name, motor]) => (
-                <MotorStatus key={name} name={name} state={motor} />
-              ))}
+            <div className="flex flex-1 items-center">
+              <TriggerButton
+                waiting={state.waiting_trigger}
+                stepIndex={state.step_index}
+                totalSteps={state.total_steps}
+                onTrigger={handleTrigger}
+              />
             </div>
+
+            <MotorSummary motors={state.motors} />
+          </>
+        ) : (
+          <div className="space-y-4 py-8">
+            <Skeleton className="h-8 w-3/4 rounded" />
+            <Skeleton className="h-6 w-1/2 rounded" />
+            <Skeleton className="h-4 w-full rounded" />
+            <p className="text-lg text-gray-400">データ未受信</p>
           </div>
-        </>
-      )}
+        )}
+      </main>
+
+      <EStopButton onStop={onEStop} />
+      <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
     </div>
   );
 }

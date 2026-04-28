@@ -1,18 +1,17 @@
 import { useState } from "react";
-import { useParams, Link as RouterLink } from "react-router-dom";
-import { Button, Card, Slider } from "@heroui/react";
+import { Link as RouterLink } from "react-router-dom";
+import { Button, Card, Skeleton, Slider } from "@heroui/react";
 import { useRobot } from "../context/RobotContext";
+import { ConnectionStatus } from "../components/ConnectionStatus";
 import { MotorStatus } from "../components/MotorStatus";
+import { EStopButton } from "../components/EStopButton";
+import { EStopOverlay } from "../components/EStopOverlay";
 
-const ROBOT_MAP: Record<string, string> = {
-  "main-hand": "main_hand",
-  "sub-hand": "sub_hand",
-};
-
-const LABEL_MAP: Record<string, string> = {
-  "main-hand": "メインハンド",
-  "sub-hand": "サブハンド",
-};
+interface MotorTuningProps {
+  eStopActive: boolean;
+  onEStop: () => void;
+  onEStopRelease: () => void;
+}
 
 const PID_PARAMS = [
   { key: "kp", label: "Kp", max: 10 },
@@ -20,19 +19,17 @@ const PID_PARAMS = [
   { key: "kd", label: "Kd", max: 5 },
 ] as const;
 
-export function MotorTuning() {
-  const { states, send } = useRobot();
-  const { robotName } = useParams<{ robotName: string }>();
-  const robotKey = ROBOT_MAP[robotName ?? ""] ?? robotName ?? "";
-  const state = states[robotKey];
-  const label = LABEL_MAP[robotName ?? ""] ?? robotName;
+const ROBOTS = [
+  { key: "main_hand", label: "メインハンド" },
+  { key: "sub_hand", label: "サブハンド" },
+] as const;
 
-  const [values, setValues] = useState<Record<string, Record<string, number>>>(
-    {}
-  );
+export function MotorTuning({ eStopActive, onEStop, onEStopRelease }: MotorTuningProps) {
+  const { states, connected, send } = useRobot();
 
-  const getValue = (motor: string, param: string) =>
-    values[motor]?.[param] ?? 0;
+  const [values, setValues] = useState<Record<string, Record<string, number>>>({});
+
+  const getValue = (motor: string, param: string) => values[motor]?.[param] ?? 0;
 
   const setValue = (motor: string, param: string, val: number) => {
     setValues((prev) => ({
@@ -47,76 +44,90 @@ export function MotorTuning() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <RouterLink to={`/${robotName}`}>
-          <Button variant="ghost" size="sm">
-            ← 操作画面に戻る
-          </Button>
-        </RouterLink>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {label} モータ調整
-        </h1>
-      </div>
+    <div className="flex min-h-screen flex-col bg-white pb-24">
+      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center gap-4">
+          <RouterLink to="/" className="text-sm text-gray-400 hover:text-gray-600">
+            ← Dashboard
+          </RouterLink>
+          <h1 className="text-2xl font-black text-gray-900">モータ調整</h1>
+        </div>
+        <ConnectionStatus connected={connected} />
+      </header>
 
-      {!state ? (
-        <p className="text-gray-400">データ未受信</p>
-      ) : (
-        <div className="space-y-6">
-          {Object.entries(state.motors).map(([motorName, motorState]) => (
-            <Card key={motorName} className="p-6">
-              <div className="flex flex-wrap gap-6">
-                <div className="min-w-[200px]">
-                  <MotorStatus name={motorName} state={motorState} />
+      <main className="mx-auto w-full max-w-5xl space-y-10 px-6 py-6">
+        {ROBOTS.map(({ key, label }) => {
+          const state = states[key];
+          return (
+            <section key={key}>
+              <h2 className="mb-4 text-2xl font-bold text-gray-900">{label}</h2>
+              {!state ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-6 w-1/2 rounded" />
+                  <Skeleton className="h-4 w-full rounded" />
+                  <p className="text-lg text-gray-400">データ未受信</p>
                 </div>
+              ) : Object.keys(state.motors).length === 0 ? (
+                <p className="text-lg text-gray-400">モータ情報なし</p>
+              ) : (
+                <div className="space-y-5">
+                  {Object.entries(state.motors).map(([motorName, motorState]) => (
+                    <Card key={motorName} className="p-5">
+                      <div className="flex flex-wrap gap-6">
+                        <div className="min-w-[220px]">
+                          <MotorStatus name={motorName} state={motorState} />
+                        </div>
 
-                <div className="min-w-[280px] flex-1 space-y-4">
-                  <h3 className="font-semibold text-gray-700">
-                    パラメータ設定
-                  </h3>
-                  {PID_PARAMS.map(({ key, label: paramLabel, max }) => (
-                    <div key={key} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-600">
-                          {paramLabel}
-                        </span>
-                        <span className="font-mono text-sm text-gray-800">
-                          {getValue(motorName, key).toFixed(2)}
-                        </span>
+                        <div className="min-w-[300px] flex-1 space-y-4">
+                          <h3 className="text-lg font-semibold text-gray-700">パラメータ設定</h3>
+                          {PID_PARAMS.map(({ key: paramKey, label: paramLabel, max }) => (
+                            <div key={paramKey} className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-base font-medium text-gray-600">
+                                  {paramLabel}
+                                </span>
+                                <span className="font-mono text-base text-gray-800">
+                                  {getValue(motorName, paramKey).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Slider
+                                  aria-label={paramLabel}
+                                  minValue={0}
+                                  maxValue={max}
+                                  step={0.01}
+                                  value={getValue(motorName, paramKey)}
+                                  onChange={(v) => setValue(motorName, paramKey, v as number)}
+                                  className="flex-1"
+                                >
+                                  <Slider.Track>
+                                    <Slider.Fill />
+                                    <Slider.Thumb />
+                                  </Slider.Track>
+                                </Slider>
+                                <Button
+                                  size="md"
+                                  variant="primary"
+                                  onPress={() => handleSend(motorName, paramKey)}
+                                >
+                                  送信
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Slider
-                          aria-label={paramLabel}
-                          minValue={0}
-                          maxValue={max}
-                          step={0.01}
-                          value={getValue(motorName, key)}
-                          onChange={(v) =>
-                            setValue(motorName, key, v as number)
-                          }
-                          className="flex-1"
-                        >
-                          <Slider.Track>
-                            <Slider.Fill />
-                            <Slider.Thumb />
-                          </Slider.Track>
-                        </Slider>
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onPress={() => handleSend(motorName, key)}
-                        >
-                          送信
-                        </Button>
-                      </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+              )}
+            </section>
+          );
+        })}
+      </main>
+
+      <EStopButton onStop={onEStop} />
+      <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
     </div>
   );
 }

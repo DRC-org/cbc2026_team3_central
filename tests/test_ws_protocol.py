@@ -144,6 +144,81 @@ class TestUnknownCommandIgnored:
             await ws.close()
 
 
+class TestEStopSetsActiveState:
+    async def test_e_stop_sets_active_state(self) -> None:
+        """e_stop コマンドで e_stop_state メッセージが配信されることを検証する。"""
+        server = _build_server()
+        app = server.create_app()
+
+        async with TestClient(TestServer(app)) as client:
+            ws = await client.ws_connect("/ws")
+            await ws.send_json({"type": "e_stop"})
+            await asyncio.sleep(0.05)
+
+            assert server._e_stop_active is True
+
+            msg = await ws.receive_json()
+            assert msg["type"] == "e_stop_state"
+            assert msg["active"] is True
+
+            await ws.close()
+
+
+class TestEStopRelease:
+    async def test_e_stop_release(self) -> None:
+        """e_stop_release コマンドで e_stop_state active=false が配信されることを検証する。"""
+        server = _build_server()
+        app = server.create_app()
+
+        async with TestClient(TestServer(app)) as client:
+            ws = await client.ws_connect("/ws")
+
+            # まず緊急停止を有効化
+            await ws.send_json({"type": "e_stop"})
+            await asyncio.sleep(0.05)
+            msg = await ws.receive_json()
+            assert msg["active"] is True
+
+            # 緊急停止を解除
+            await ws.send_json({"type": "e_stop_release"})
+            await asyncio.sleep(0.05)
+
+            assert server._e_stop_active is False
+
+            # ブロードキャストループの state メッセージが混在するため、
+            # e_stop_state メッセージが見つかるまで読み進める
+            found = False
+            for _ in range(20):
+                try:
+                    msg = await asyncio.wait_for(ws.receive_json(), timeout=0.1)
+                except asyncio.TimeoutError:
+                    break
+                if msg.get("type") == "e_stop_state" and msg.get("active") is False:
+                    found = True
+                    break
+            assert found, "e_stop_state active=false メッセージが配信されなかった"
+
+            await ws.close()
+
+
+class TestStateIncludesEStopActive:
+    async def test_state_includes_e_stop_active(self) -> None:
+        """state メッセージに e_stop_active フィールドが含まれることを検証する。"""
+        server = _build_server()
+        app = server.create_app()
+
+        async with TestClient(TestServer(app)) as client:
+            ws = await client.ws_connect("/ws")
+
+            await server._broadcast_state()
+            msg = await ws.receive_json()
+            assert msg["type"] == "state"
+            assert "e_stop_active" in msg
+            assert msg["e_stop_active"] is False
+
+            await ws.close()
+
+
 class TestSetParamCommand:
     async def test_set_param_command(self) -> None:
         """set_param コマンドの受付を検証する。"""

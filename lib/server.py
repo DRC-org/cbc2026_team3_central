@@ -33,6 +33,7 @@ class RobotServer:
         self._ws_clients: set[web.WebSocketResponse] = set()
         self._broadcast_interval: float = 0.05
         self._broadcast_task: asyncio.Task[None] | None = None
+        self._e_stop_active: bool = False
 
     def add_robot(self, name: str, sequence: Sequence, can_manager: CANManager) -> None:
         self._robots[name] = RobotContext(sequence=sequence, can_manager=can_manager)
@@ -106,11 +107,18 @@ class RobotServer:
 
         elif cmd_type == "e_stop":
             logger.warning("緊急停止コマンド受信")
+            self._e_stop_active = True
             e_stop_msg = GenericDriver.encode_e_stop()
             for name, ctx in self._robots.items():
                 for bus_name in ctx.can_manager._buses:
                     await ctx.can_manager.send_to_bus(bus_name, e_stop_msg)
                 logger.info("E-STOP 送信: %s", name)
+            await self._broadcast_e_stop_state()
+
+        elif cmd_type == "e_stop_release":
+            logger.info("緊急停止解除コマンド受信")
+            self._e_stop_active = False
+            await self._broadcast_e_stop_state()
 
         elif cmd_type == "set_param":
             motor_name = data.get("motor")
@@ -120,6 +128,22 @@ class RobotServer:
 
         else:
             logger.debug("未知のコマンド: %s", cmd_type)
+
+    async def _broadcast_e_stop_state(self) -> None:
+        msg = json.dumps(
+            {"type": "e_stop_state", "active": self._e_stop_active},
+            ensure_ascii=False,
+        )
+        dead: set[web.WebSocketResponse] = set()
+        for ws in self._ws_clients:
+            if ws.closed:
+                dead.add(ws)
+                continue
+            try:
+                await ws.send_str(msg)
+            except ConnectionResetError:
+                dead.add(ws)
+        self._ws_clients -= dead
 
     async def _broadcast_loop(self) -> None:
         while True:
@@ -149,6 +173,9 @@ class RobotServer:
 
         self._ws_clients -= dead
 
+        if self._e_stop_active:
+            await self._broadcast_e_stop_state()
+
     def _build_state_message(self, robot_name: str) -> dict:
         ctx = self._robots[robot_name]
         progress = ctx.sequence.progress
@@ -172,6 +199,7 @@ class RobotServer:
             "total_steps": progress["total_steps"],
             "waiting_trigger": progress["waiting_trigger"],
             "motors": motors,
+            "e_stop_active": self._e_stop_active,
         }
 
     async def start(self) -> None:

@@ -1,19 +1,25 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-.e-stop-border {
+html {
+  font-size: 18px;
+}
+
+@keyframes e-stop-flash {
+  0%, 49% { background-color: rgba(220, 38, 38, 0.85); }
+  50%, 100% { background-color: rgba(255, 255, 255, 0.95); }
+}
+
+.e-stop-overlay {
+  animation: e-stop-flash 0.5s ease-in-out infinite;
+}
+
+.e-stop-stripe {
   background: repeating-linear-gradient(
     -45deg,
     #fbbf24,
-    #fbbf24 10px,
-    #1a1a1a 10px,
-    #1a1a1a 20px
+    #fbbf24 12px,
+    #1a1a1a 12px,
+    #1a1a1a 24px
   );
-  padding: 8px;
-  border-radius: 50%;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 16px rgba(220, 38, 38, 0.5); }
-  50% { box-shadow: 0 0 32px rgba(220, 38, 38, 0.8); }
 }

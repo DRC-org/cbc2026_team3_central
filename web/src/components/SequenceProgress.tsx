@@ -6,6 +6,7 @@ interface SequenceProgressProps {
   stepIndex: number;
   totalSteps: number;
   waitingTrigger: boolean;
+  large?: boolean;
 }
 
 export function SequenceProgress({
@@ -14,41 +15,55 @@ export function SequenceProgress({
   stepIndex,
   totalSteps,
   waitingTrigger,
+  large = false,
 }: SequenceProgressProps) {
   const percent = totalSteps > 0 ? ((stepIndex + 1) / totalSteps) * 100 : 0;
+  const isComplete = totalSteps > 0 && stepIndex + 1 >= totalSteps && !waitingTrigger;
+
+  const statusLabel = isComplete
+    ? "✓ 完了"
+    : waitingTrigger
+      ? "⏳ 許可待ち"
+      : "▶ 実行中";
+
+  const statusColor = isComplete ? "success" : waitingTrigger ? "warning" : "accent";
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-500">シーケンス:</span>
-        <span className="font-semibold text-gray-900">{sequence}</span>
+        <span className={`text-gray-500 ${large ? "text-lg" : "text-base"}`}>
+          シーケンス:
+        </span>
+        <span className={`font-bold text-gray-900 ${large ? "text-2xl" : "text-xl"}`}>
+          {sequence}
+        </span>
       </div>
 
-      <div className="flex items-center gap-3">
-        <span className="text-lg font-medium text-gray-800">
-          {currentStep ?? "---"}
-        </span>
-        {waitingTrigger && (
-          <Chip color="warning" variant="soft" size="sm">
-            操縦者の許可待ち
-          </Chip>
-        )}
+      <div className={`font-bold text-gray-900 ${large ? "text-3xl" : "text-2xl"}`}>
+        ステップ {stepIndex + 1} / {totalSteps}
+        <span className="ml-4 text-gray-600">「{currentStep ?? "---"}」</span>
       </div>
 
       <ProgressBar
         aria-label="シーケンス進行度"
         value={percent}
-        color={waitingTrigger ? "warning" : "accent"}
-        size="md"
+        color={statusColor}
+        size="lg"
+        className="h-4"
       >
         <ProgressBar.Track>
           <ProgressBar.Fill />
         </ProgressBar.Track>
       </ProgressBar>
 
-      <p className="text-sm text-gray-500">
-        ステップ {stepIndex + 1} / {totalSteps}
-      </p>
+      <div className="flex items-center gap-2">
+        <span className={`font-mono text-gray-500 ${large ? "text-lg" : "text-base"}`}>
+          {Math.round(percent)}%
+        </span>
+        <Chip color={statusColor} variant="soft" size="lg" className="text-base font-semibold">
+          {statusLabel}
+        </Chip>
+      </div>
     </div>
   );
 }
