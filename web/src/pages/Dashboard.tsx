@@ -1,75 +1,71 @@
-import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
+import { Card, Chip, Skeleton } from "@heroui/react";
+import { useRobot } from "../context/RobotContext";
 import { SequenceProgress } from "../components/SequenceProgress";
-import type { RobotState } from "../hooks/useRobotSocket";
 
-interface DashboardProps {
-  states: Record<string, RobotState>;
-  connected: boolean;
-}
-
-const ROBOTS: { key: string; label: string; path: string }[] = [
+const ROBOTS = [
   { key: "main_hand", label: "メインハンド", path: "/main-hand" },
   { key: "sub_hand", label: "サブハンド", path: "/sub-hand" },
-];
+] as const;
 
-const cardStyle: CSSProperties = {
-  backgroundColor: "#0f3460",
-  borderRadius: 12,
-  padding: 24,
-  cursor: "pointer",
-  transition: "transform 0.15s",
-  flex: 1,
-  minWidth: 320,
-};
-
-export function Dashboard({ states, connected }: DashboardProps) {
+export function Dashboard() {
+  const { states, connected } = useRobot();
   const navigate = useNavigate();
 
   return (
-    <div style={{ padding: 32 }}>
-      <h1 style={{ color: "#eee", marginBottom: 8 }}>
-        CBC2026 Team3 Central
-      </h1>
-      <div style={{ color: connected ? "#16a34a" : "#dc2626", marginBottom: 24 }}>
-        ● {connected ? "接続中" : "未接続"}
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="mt-1 text-sm text-gray-500">両ロボットの状態概要</p>
       </div>
 
-      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+      <div className="grid gap-6 md:grid-cols-2">
         {ROBOTS.map(({ key, label, path }) => {
           const state = states[key];
           return (
-            <div
+            <Card
               key={key}
-              style={cardStyle}
+              className="cursor-pointer p-6 transition-shadow hover:shadow-lg"
               onClick={() => navigate(path)}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.transform = "scale(1.02)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.transform = "scale(1)")
-              }
             >
-              <h2 style={{ color: "#93c5fd", margin: 0 }}>{label}</h2>
-              {state ? (
-                <>
-                  <SequenceProgress
-                    sequence={state.sequence}
-                    currentStep={state.current_step}
-                    stepIndex={state.step_index}
-                    totalSteps={state.total_steps}
-                    waitingTrigger={state.waiting_trigger}
-                  />
-                  <div style={{ color: "#aaa", fontSize: 13 }}>
-                    モータ数: {Object.keys(state.motors).length}
-                  </div>
-                </>
-              ) : (
-                <div style={{ color: "#888", marginTop: 12 }}>
-                  データ未受信
+              <Card.Header className="pb-4">
+                <div className="flex items-center justify-between">
+                  <Card.Title className="text-xl font-bold">{label}</Card.Title>
+                  {connected && state ? (
+                    <Chip color="success" variant="soft" size="sm">
+                      稼働中
+                    </Chip>
+                  ) : (
+                    <Chip color="default" variant="soft" size="sm">
+                      未接続
+                    </Chip>
+                  )}
                 </div>
-              )}
-            </div>
+              </Card.Header>
+              <Card.Content>
+                {state ? (
+                  <div className="space-y-3">
+                    <SequenceProgress
+                      sequence={state.sequence}
+                      currentStep={state.current_step}
+                      stepIndex={state.step_index}
+                      totalSteps={state.total_steps}
+                      waitingTrigger={state.waiting_trigger}
+                    />
+                    <p className="text-sm text-gray-500">
+                      モータ数: {Object.keys(state.motors).length}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-3/4 rounded" />
+                    <Skeleton className="h-4 w-1/2 rounded" />
+                    <Skeleton className="h-3 w-full rounded" />
+                    <p className="mt-2 text-sm text-gray-400">データ未受信</p>
+                  </div>
+                )}
+              </Card.Content>
+            </Card>
           );
         })}
       </div>

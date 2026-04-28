@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { Chip, ProgressBar } from "@heroui/react";
 
 interface SequenceProgressProps {
   sequence: string;
@@ -8,19 +8,6 @@ interface SequenceProgressProps {
   waitingTrigger: boolean;
 }
 
-const containerStyle: CSSProperties = {
-  padding: 16,
-  backgroundColor: "#16213e",
-  borderRadius: 8,
-  marginBottom: 16,
-};
-
-const barContainerStyle: CSSProperties = {
-  display: "flex",
-  gap: 4,
-  marginTop: 12,
-};
-
 export function SequenceProgress({
   sequence,
   currentStep,
@@ -28,50 +15,40 @@ export function SequenceProgress({
   totalSteps,
   waitingTrigger,
 }: SequenceProgressProps) {
-  const steps = Array.from({ length: totalSteps }, (_, i) => i);
+  const percent = totalSteps > 0 ? ((stepIndex + 1) / totalSteps) * 100 : 0;
 
   return (
-    <div style={containerStyle}>
-      <div style={{ fontSize: 14, color: "#aaa" }}>
-        シーケンス: <strong style={{ color: "#eee" }}>{sequence}</strong>
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-gray-500">シーケンス:</span>
+        <span className="font-semibold text-gray-900">{sequence}</span>
       </div>
-      <div style={{ fontSize: 16, marginTop: 4, color: "#eee" }}>
-        {currentStep ?? "---"}
+
+      <div className="flex items-center gap-3">
+        <span className="text-lg font-medium text-gray-800">
+          {currentStep ?? "---"}
+        </span>
         {waitingTrigger && (
-          <span
-            style={{
-              marginLeft: 12,
-              color: "#facc15",
-              animation: "blink 1s step-end infinite",
-            }}
-          >
-            ● 待機中
-          </span>
+          <Chip color="warning" variant="soft" size="sm">
+            操縦者の許可待ち
+          </Chip>
         )}
       </div>
-      <div style={barContainerStyle}>
-        {steps.map((i) => {
-          let bg = "#333";
-          if (i < stepIndex) bg = "#16a34a";
-          else if (i === stepIndex) bg = waitingTrigger ? "#facc15" : "#3b82f6";
-          return (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: bg,
-                transition: "background-color 0.3s",
-              }}
-            />
-          );
-        })}
-      </div>
-      <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+
+      <ProgressBar
+        aria-label="シーケンス進行度"
+        value={percent}
+        color={waitingTrigger ? "warning" : "accent"}
+        size="md"
+      >
+        <ProgressBar.Track>
+          <ProgressBar.Fill />
+        </ProgressBar.Track>
+      </ProgressBar>
+
+      <p className="text-sm text-gray-500">
         ステップ {stepIndex + 1} / {totalSteps}
-      </div>
-      <style>{`@keyframes blink { 50% { opacity: 0; } }`}</style>
+      </p>
     </div>
   );
 }

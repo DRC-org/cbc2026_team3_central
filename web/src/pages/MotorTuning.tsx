@@ -1,13 +1,8 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link as RouterLink } from "react-router-dom";
+import { Button, Card, Slider } from "@heroui/react";
+import { useRobot } from "../context/RobotContext";
 import { MotorStatus } from "../components/MotorStatus";
-import type { RobotState } from "../hooks/useRobotSocket";
-import type { CSSProperties } from "react";
-
-interface MotorTuningProps {
-  states: Record<string, RobotState>;
-  send: (data: object) => void;
-}
 
 const ROBOT_MAP: Record<string, string> = {
   "main-hand": "main_hand",
@@ -19,41 +14,27 @@ const LABEL_MAP: Record<string, string> = {
   "sub-hand": "サブハンド",
 };
 
-const PID_PARAMS = ["kp", "ki", "kd"] as const;
+const PID_PARAMS = [
+  { key: "kp", label: "Kp", max: 10 },
+  { key: "ki", label: "Ki", max: 5 },
+  { key: "kd", label: "Kd", max: 5 },
+] as const;
 
-const inputStyle: CSSProperties = {
-  width: 80,
-  padding: "4px 8px",
-  backgroundColor: "#1a1a2e",
-  color: "#eee",
-  border: "1px solid #444",
-  borderRadius: 4,
-  fontSize: 14,
-  fontFamily: "monospace",
-};
-
-const sendBtnStyle: CSSProperties = {
-  padding: "4px 12px",
-  backgroundColor: "#3b82f6",
-  color: "#fff",
-  border: "none",
-  borderRadius: 4,
-  cursor: "pointer",
-  fontSize: 13,
-};
-
-export function MotorTuning({ states, send }: MotorTuningProps) {
+export function MotorTuning() {
+  const { states, send } = useRobot();
   const { robotName } = useParams<{ robotName: string }>();
   const robotKey = ROBOT_MAP[robotName ?? ""] ?? robotName ?? "";
   const state = states[robotKey];
   const label = LABEL_MAP[robotName ?? ""] ?? robotName;
 
-  const [values, setValues] = useState<Record<string, Record<string, string>>>({});
+  const [values, setValues] = useState<Record<string, Record<string, number>>>(
+    {}
+  );
 
   const getValue = (motor: string, param: string) =>
-    values[motor]?.[param] ?? "";
+    values[motor]?.[param] ?? 0;
 
-  const setValue = (motor: string, param: string, val: string) => {
+  const setValue = (motor: string, param: string, val: number) => {
     setValues((prev) => ({
       ...prev,
       [motor]: { ...prev[motor], [param]: val },
@@ -61,72 +42,78 @@ export function MotorTuning({ states, send }: MotorTuningProps) {
   };
 
   const handleSend = (motor: string, param: string) => {
-    const raw = getValue(motor, param);
-    const num = parseFloat(raw);
-    if (isNaN(num)) return;
-    send({ type: "set_param", motor, key: param, value: num });
+    const val = getValue(motor, param);
+    send({ type: "set_param", motor, key: param, value: val });
   };
 
   return (
-    <div style={{ padding: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-        <Link to={`/${robotName}`} style={{ color: "#93c5fd", textDecoration: "none" }}>
-          ← 操作画面に戻る
-        </Link>
-        <h1 style={{ color: "#eee", margin: 0 }}>{label} モータ調整</h1>
+    <div className="space-y-8">
+      <div className="flex items-center gap-4">
+        <RouterLink to={`/${robotName}`}>
+          <Button variant="ghost" size="sm">
+            ← 操作画面に戻る
+          </Button>
+        </RouterLink>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {label} モータ調整
+        </h1>
       </div>
 
       {!state ? (
-        <div style={{ color: "#888" }}>データ未受信</div>
+        <p className="text-gray-400">データ未受信</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div className="space-y-6">
           {Object.entries(state.motors).map(([motorName, motorState]) => (
-            <div
-              key={motorName}
-              style={{
-                backgroundColor: "#0f3460",
-                borderRadius: 12,
-                padding: 20,
-              }}
-            >
-              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                <MotorStatus name={motorName} state={motorState} />
+            <Card key={motorName} className="p-6">
+              <div className="flex flex-wrap gap-6">
+                <div className="min-w-[200px]">
+                  <MotorStatus name={motorName} state={motorState} />
+                </div>
 
-                <div style={{ flex: 1, minWidth: 240 }}>
-                  <h3 style={{ color: "#93c5fd", marginTop: 0 }}>
+                <div className="min-w-[280px] flex-1 space-y-4">
+                  <h3 className="font-semibold text-gray-700">
                     パラメータ設定
                   </h3>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {PID_PARAMS.map((param) => (
-                      <div
-                        key={param}
-                        style={{ display: "flex", alignItems: "center", gap: 8 }}
-                      >
-                        <span style={{ color: "#aaa", width: 28, fontSize: 14 }}>
-                          {param}
+                  {PID_PARAMS.map(({ key, label: paramLabel, max }) => (
+                    <div key={key} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-600">
+                          {paramLabel}
                         </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          style={inputStyle}
-                          value={getValue(motorName, param)}
-                          onChange={(e) =>
-                            setValue(motorName, param, e.target.value)
+                        <span className="font-mono text-sm text-gray-800">
+                          {getValue(motorName, key).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Slider
+                          aria-label={paramLabel}
+                          minValue={0}
+                          maxValue={max}
+                          step={0.01}
+                          value={getValue(motorName, key)}
+                          onChange={(v) =>
+                            setValue(motorName, key, v as number)
                           }
-                          placeholder="0.00"
-                        />
-                        <button
-                          style={sendBtnStyle}
-                          onClick={() => handleSend(motorName, param)}
+                          className="flex-1"
+                        >
+                          <Slider.Track>
+                            <Slider.Fill />
+                            <Slider.Thumb />
+                          </Slider.Track>
+                        </Slider>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onPress={() => handleSend(motorName, key)}
                         >
                           送信
-                        </button>
+                        </Button>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

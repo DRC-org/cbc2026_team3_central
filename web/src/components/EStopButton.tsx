@@ -1,34 +1,23 @@
-import type { CSSProperties } from "react";
-
 interface EStopButtonProps {
   onStop: () => void;
 }
 
-const style: CSSProperties = {
-  position: "fixed",
-  bottom: 32,
-  right: 32,
-  width: 96,
-  height: 96,
-  borderRadius: "50%",
-  backgroundColor: "#dc2626",
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: 700,
-  border: "4px solid #991b1b",
-  cursor: "pointer",
-  boxShadow: "0 0 24px rgba(220, 38, 38, 0.6)",
-  zIndex: 9999,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  userSelect: "none",
-};
-
 export function EStopButton({ onStop }: EStopButtonProps) {
   return (
-    <button style={style} onClick={onStop} title="緊急停止">
-      E-STOP
-    </button>
+    <div className="fixed bottom-8 right-8 z-[9999]">
+      <div className="e-stop-border">
+        <button
+          onClick={onStop}
+          title="緊急停止"
+          className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-full border-4 border-red-900 bg-red-600 text-sm font-bold text-white shadow-lg hover:bg-red-700 active:bg-red-800"
+          style={{ animation: "pulse-glow 2s ease-in-out infinite" }}
+        >
+          <span className="text-center leading-tight">
+            <span className="block text-2xl">&#x26A0;</span>
+            <span className="block text-xs">緊急停止</span>
+          </span>
+        </button>
+      </div>
+    </div>
   );
 }
