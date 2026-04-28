@@ -62,51 +62,53 @@ export function MotorTuning({ eStopActive, onEStop, onEStopRelease }: MotorTunin
               ) : (
                 <div className="space-y-5">
                   {Object.entries(state.motors).map(([motorName, motorState]) => (
-                    <Card key={motorName} className="p-5">
-                      <div className="flex flex-wrap gap-6">
-                        <div className="min-w-[220px]">
-                          <MotorStatus name={motorName} state={motorState} />
-                        </div>
+                    <Card key={motorName}>
+                      <Card.Content className="p-5">
+                        <div className="flex flex-wrap gap-6">
+                          <div className="min-w-[220px]">
+                            <MotorStatus name={motorName} state={motorState} />
+                          </div>
 
-                        <div className="min-w-[300px] flex-1 space-y-4">
-                          <h3 className="text-lg font-semibold text-gray-700">パラメータ設定</h3>
-                          {PID_PARAMS.map(({ key: paramKey, label: paramLabel, max }) => (
-                            <div key={paramKey} className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-base font-medium text-gray-600">
-                                  {paramLabel}
-                                </span>
-                                <span className="font-mono text-base text-gray-800">
-                                  {getValue(motorName, paramKey).toFixed(2)}
-                                </span>
+                          <div className="min-w-[300px] flex-1 space-y-4">
+                            <h3 className="text-lg font-semibold text-gray-700">パラメータ設定</h3>
+                            {PID_PARAMS.map(({ key: paramKey, label: paramLabel, max }) => (
+                              <div key={paramKey} className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-base font-medium text-gray-600">
+                                    {paramLabel}
+                                  </span>
+                                  <span className="font-mono text-base text-gray-800">
+                                    {getValue(motorName, paramKey).toFixed(2)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <Slider
+                                    aria-label={paramLabel}
+                                    minValue={0}
+                                    maxValue={max}
+                                    step={0.01}
+                                    value={getValue(motorName, paramKey)}
+                                    onChange={(v) => setValue(motorName, paramKey, v as number)}
+                                    className="flex-1"
+                                  >
+                                    <Slider.Track>
+                                      <Slider.Fill />
+                                      <Slider.Thumb />
+                                    </Slider.Track>
+                                  </Slider>
+                                  <Button
+                                    size="md"
+                                    variant="primary"
+                                    onPress={() => handleSend(motorName, paramKey)}
+                                  >
+                                    送信
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <Slider
-                                  aria-label={paramLabel}
-                                  minValue={0}
-                                  maxValue={max}
-                                  step={0.01}
-                                  value={getValue(motorName, paramKey)}
-                                  onChange={(v) => setValue(motorName, paramKey, v as number)}
-                                  className="flex-1"
-                                >
-                                  <Slider.Track>
-                                    <Slider.Fill />
-                                    <Slider.Thumb />
-                                  </Slider.Track>
-                                </Slider>
-                                <Button
-                                  size="md"
-                                  variant="primary"
-                                  onPress={() => handleSend(motorName, paramKey)}
-                                >
-                                  送信
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      </Card.Content>
                     </Card>
                   ))}
                 </div>
