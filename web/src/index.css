@@ -11,7 +11,7 @@ html {
 }
 
 .e-stop-overlay {
-  animation: e-stop-flash 0.5s ease-in-out infinite;
+  animation: e-stop-flash 1s ease-in-out infinite;
 }
 
 .e-stop-stripe {

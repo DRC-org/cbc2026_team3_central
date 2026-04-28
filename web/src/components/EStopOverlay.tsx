@@ -5,89 +5,125 @@ interface EStopOverlayProps {
   onRelease: () => void;
 }
 
-const HOLD_DURATION = 3000;
-const CIRCLE_RADIUS = 54;
-const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
+const RELEASE_ANGLE = 90;
+const SNAP_BACK_MS = 300;
 
 export function EStopOverlay({ active, onRelease }: EStopOverlayProps) {
-  const [pressing, setPressing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const startTimeRef = useRef<number>(0);
-  const rafRef = useRef<number>(0);
+  const [rotation, setRotation] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [snapping, setSnapping] = useState(false);
+  const knobRef = useRef<HTMLDivElement>(null);
+  const startAngleRef = useRef(0);
+  const baseRotationRef = useRef(0);
 
-  const cancelHold = useCallback(() => {
-    setPressing(false);
-    setProgress(0);
-    cancelAnimationFrame(rafRef.current);
-  }, []);
+  const getPointerAngle = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = knobRef.current;
+      if (!el) return 0;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      return Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI);
+    },
+    [],
+  );
 
-  const tick = useCallback(() => {
-    const elapsed = Date.now() - startTimeRef.current;
-    const p = Math.min(elapsed / HOLD_DURATION, 1);
-    setProgress(p);
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      knobRef.current?.setPointerCapture(e.pointerId);
+      setDragging(true);
+      setSnapping(false);
+      startAngleRef.current = getPointerAngle(e.clientX, e.clientY);
+      baseRotationRef.current = rotation;
+    },
+    [getPointerAngle, rotation],
+  );
 
-    if (p >= 1) {
-      cancelHold();
-      onRelease();
-      return;
-    }
-    rafRef.current = requestAnimationFrame(tick);
-  }, [onRelease, cancelHold]);
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragging) return;
+      const current = getPointerAngle(e.clientX, e.clientY);
+      let delta = current - startAngleRef.current;
 
-  const startHold = useCallback(() => {
-    setPressing(true);
-    startTimeRef.current = Date.now();
-    rafRef.current = requestAnimationFrame(tick);
-  }, [tick]);
+      // -180/180 の境界をまたいだ時の補正
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
 
+      // 時計回りのみ有効（0〜RELEASE_ANGLE にクランプ）
+      const newRotation = Math.max(0, Math.min(RELEASE_ANGLE, baseRotationRef.current + delta));
+      setRotation(newRotation);
+
+      if (newRotation >= RELEASE_ANGLE) {
+        setDragging(false);
+        onRelease();
+        setRotation(0);
+      }
+    },
+    [dragging, getPointerAngle, onRelease],
+  );
+
+  const onPointerUp = useCallback(() => {
+    if (!dragging) return;
+    setDragging(false);
+    // バネのように 0° に戻る
+    setSnapping(true);
+    setRotation(0);
+    setTimeout(() => setSnapping(false), SNAP_BACK_MS);
+  }, [dragging]);
+
+  // active が false になったらリセット
   useEffect(() => {
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
+    if (!active) {
+      setRotation(0);
+      setDragging(false);
+      setSnapping(false);
+    }
+  }, [active]);
 
   if (!active) return null;
 
-  const strokeDashoffset = CIRCLE_CIRCUMFERENCE * (1 - progress);
-  const seconds = Math.ceil(HOLD_DURATION / 1000 * (1 - progress));
-
   return (
     <div className="e-stop-overlay fixed inset-0 z-[99999] flex flex-col items-center justify-center">
-      <p className="mb-8 text-6xl font-black text-gray-900 drop-shadow-lg">
+      <p className="mb-12 text-6xl font-black text-gray-900 drop-shadow-lg select-none">
         ⚠ 緊急停止中
       </p>
 
-      <div className="relative flex flex-col items-center">
-        <svg width="140" height="140" className="rotate-[-90deg]">
-          <circle
-            cx="70"
-            cy="70"
-            r={CIRCLE_RADIUS}
-            fill="none"
-            stroke="#d1d5db"
-            strokeWidth="8"
-          />
-          <circle
-            cx="70"
-            cy="70"
-            r={CIRCLE_RADIUS}
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeDasharray={CIRCLE_CIRCUMFERENCE}
-            strokeDashoffset={strokeDashoffset}
-            className="transition-none"
-          />
-        </svg>
-        <button
-          onPointerDown={startHold}
-          onPointerUp={cancelHold}
-          onPointerLeave={cancelHold}
-          onContextMenu={(e) => e.preventDefault()}
-          className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full text-center text-lg font-bold text-gray-900 select-none"
+      <div
+        ref={knobRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onContextMenu={(e) => e.preventDefault()}
+        className="relative flex cursor-grab select-none items-center justify-center active:cursor-grabbing"
+        style={{ touchAction: "none" }}
+      >
+        {/* ノブ本体 */}
+        <div
+          className="flex h-48 w-48 items-center justify-center rounded-full border-8 border-red-900 bg-red-600 shadow-2xl"
+          style={{
+            transform: `rotate(${rotation}deg)`,
+            transition: snapping ? `transform ${SNAP_BACK_MS}ms ease-out` : "none",
+          }}
         >
-          {pressing ? `解除中... (${seconds}s)` : "長押しで解除"}
-        </button>
+          {/* 矢印マーク（回転方向ガイド） */}
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+            <path
+              d="M40 16 A24 24 0 1 1 16 40"
+              stroke="white"
+              strokeWidth="4"
+              strokeLinecap="round"
+              fill="none"
+            />
+            <polygon points="18,28 8,40 22,44" fill="white" />
+          </svg>
+        </div>
       </div>
+
+      <p className="mt-8 text-2xl font-bold text-gray-800 select-none">
+        回して解除
+      </p>
     </div>
   );
 }
