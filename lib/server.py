@@ -42,13 +42,22 @@ class RobotServer:
         app.router.add_get("/ws", self._ws_handler)
 
         if _WEB_DIST_DIR.is_dir():
-            app.router.add_static("/", _WEB_DIST_DIR, show_index=True)
+            app.router.add_static("/assets", _WEB_DIST_DIR / "assets")
+            app.router.add_get("/{path:.*}", self._spa_handler)
 
         app.on_startup.append(self._on_startup)
         app.on_shutdown.append(self._on_shutdown)
 
         self._app = app
         return app
+
+    async def _spa_handler(self, request: web.Request) -> web.StreamResponse:
+        """SPA フォールバック: 静的ファイルがあればそれを返し、なければ index.html を返す"""
+        path = request.match_info.get("path", "")
+        file_path = _WEB_DIST_DIR / path
+        if path and file_path.is_file():
+            return web.FileResponse(file_path)
+        return web.FileResponse(_WEB_DIST_DIR / "index.html")
 
     async def _on_startup(self, app: web.Application) -> None:
         self._broadcast_task = asyncio.create_task(self._broadcast_loop())
