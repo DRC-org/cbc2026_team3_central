@@ -15,11 +15,14 @@ export interface RobotState {
   total_steps: number;
   waiting_trigger: boolean;
   motors: Record<string, MotorState>;
+  e_stop_active?: boolean;
 }
 
 interface UseRobotSocketReturn {
   states: Record<string, RobotState>;
   connected: boolean;
+  eStopActive: boolean;
+  setEStopActive: (active: boolean) => void;
   send: (data: object) => void;
 }
 
@@ -29,6 +32,7 @@ const RECONNECT_INTERVAL = 3000;
 export function useRobotSocket(url: string = DEFAULT_URL): UseRobotSocketReturn {
   const [states, setStates] = useState<Record<string, RobotState>>({});
   const [connected, setConnected] = useState(false);
+  const [eStopActive, setEStopActive] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -38,25 +42,30 @@ export function useRobotSocket(url: string = DEFAULT_URL): UseRobotSocketReturn 
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
-    ws.onopen = () => setConnected(true);
+    ws.addEventListener("open", () => setConnected(true));
 
-    ws.onclose = () => {
+    ws.addEventListener("close", () => {
       setConnected(false);
       reconnectTimer.current = setTimeout(connect, RECONNECT_INTERVAL);
-    };
+    });
 
-    ws.onerror = () => ws.close();
+    ws.addEventListener("error", () => ws.close());
 
-    ws.onmessage = (event) => {
+    ws.addEventListener("message", (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === "state" && msg.robot) {
           setStates((prev) => ({ ...prev, [msg.robot]: msg }));
+          if (typeof msg.e_stop_active === "boolean") {
+            setEStopActive(msg.e_stop_active);
+          }
+        } else if (msg.type === "e_stop_state" && typeof msg.active === "boolean") {
+          setEStopActive(msg.active);
         }
       } catch {
         // 不正な JSON は無視
       }
-    };
+    });
   }, [url]);
 
   useEffect(() => {
@@ -73,5 +82,5 @@ export function useRobotSocket(url: string = DEFAULT_URL): UseRobotSocketReturn 
     }
   }, []);
 
-  return { states, connected, send };
+  return { states, connected, eStopActive, setEStopActive, send };
 }

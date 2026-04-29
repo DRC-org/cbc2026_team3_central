@@ -411,14 +411,34 @@ class PickAndPlace(Sequence):
 
 ### Phase 4: Web UI
 
+#### ツール構成（2026-04 確定）
+
+| 項目 | 採用 | 補足 |
+|---|---|---|
+| パッケージマネージャ | **pnpm@10**（`packageManager` フィールドで固定）| `web/.npmrc` に `auto-install-peers=true` |
+| Linter | **oxlint** | `web/.oxlintrc.json`、react/typescript/unicorn/import/jsx-a11y プラグイン |
+| Formatter | **oxfmt** (Beta) | `web/.oxfmtrc.json`、Tailwind ソート + import ソート組み込み |
+| ESLint / Prettier | 不採用（削除済み）| oxlint + oxfmt に集約 |
+| フォント | `@fontsource/inter` + `@fontsource-variable/noto-sans-jp` + `@fontsource-variable/jetbrains-mono`（自己ホスト） | Tailwind `@theme` の `--font-sans` で英→Inter、日本語→Noto Sans JP のグリフ単位フォールバック |
+| アイコン | `lucide-react` | 絵文字非依存。`Icon` 共通ラッパー経由で利用 |
+| テーマ | **ライトのみ**（パープル基調 `oklch(55% 0.22 295)`） | `web/src/index.css` の `@theme` でトークン定義 |
+| scripts | `dev` / `build` / `preview` / `lint` / `lint:fix` / `format` / `format:check` / `check` | `check` = `lint && format:check && tsc -b --noEmit` |
+
+#### ファイル一覧
+
 | # | ファイル | 内容 |
 |---|---|---|
 | 4-1 | `web/` scaffold | Vite + React + React Router + TypeScript 初期セットアップ |
-| 4-2 | `useRobotSocket.ts` | WebSocket 接続管理、自動再接続、状態パース |
-| 4-3 | `Dashboard.tsx` | 両ロボットの状態概要、シーケンス進行状況 |
-| 4-4 | `RobotControl.tsx` | 操作画面: TriggerButton + SequenceProgress + MotorStatus 一覧 |
-| 4-5 | `MotorTuning.tsx` | 個別モータのパラメータ調整（PID ゲイン等） |
-| 4-6 | `EStopButton.tsx` | 常に画面上に表示される緊急停止ボタン |
+| 4-2 | `useRobotSocket.ts` | WebSocket 接続管理、自動再接続、状態パース、`e_stop_state` 専用イベント受信 |
+| 4-3 | `Dashboard.tsx` | 両ロボットの状態概要を Card 化して表示、操縦画面へのリンク |
+| 4-4 | `RobotControl.tsx` | 操作画面: SequenceProgress + 大型 TriggerButton + MotorSummary（折りたたみ）|
+| 4-5 | `MotorTuning.tsx` | モータごとの状態 + PID パラメータ調整（Slider + 送信ボタン） |
+| 4-6 | `EStopButton.tsx` | ヘッダー右に常設。lucide AlertTriangle アイコン + 黄黒ストライプ装飾 |
+| 4-7 | `EStopOverlay.tsx` | 全画面赤フラッシュ + パルスリング + 進捗リング SVG。時計回り 90° ツイストで解除 |
+| 4-8 | `AppHeader.tsx` | 共通ヘッダー（lucide アイコン化）+ Drawer メニュー（NavLink ベース）+ 全画面切替 |
+| 4-9 | `router.tsx` | レイアウトルートで AppHeader と EStopOverlay を一元化、各ページから重複排除 |
+| 4-10 | `components/Icon.tsx`, `StatusDot.tsx`, `StatPill.tsx`, `ConnectionStatus.tsx`, `SequenceProgress.tsx`, `MotorStatus.tsx`, `MotorSummary.tsx`, `TriggerButton.tsx` | デザイントークンに準拠した共通 UI 部品 |
+| 4-11 | `index.css` / `index.html` | `@theme` トークン定義（色・フォント・影・角丸）、`color-scheme: light` 固定 |
 
 ### Phase 5: ロボット固有シーケンス
 
@@ -426,6 +446,114 @@ class PickAndPlace(Sequence):
 |---|---|---|
 | 5-1 | `robots/main_hand.py` | メインハンドのシーケンスクラス（担当者が記述） |
 | 5-2 | `robots/sub_hand.py` | サブハンドのシーケンスクラス（担当者が記述） |
+
+### Phase 6: CAN Bus ヘルスチェック — TDD
+
+運用中に検出したい異常は H1 バス断線/バスオフ、H2 モータ無応答、H3 バス輻輳/エラー多発、H4 モータ自身の異常（過熱・過電流）の 4 種類。受動監視（受信タイムスタンプ + 送信失敗例外）を主体とし、能動 ping は明示要求時のみとする。状態は WS 配信と `GET /health` の両方で公開する。
+
+#### データ構造
+
+```python
+# lib/health.py
+class BusHealth(Enum): OK / DEGRADED / DOWN
+class MotorHealth(Enum): OK / STALE / WARNING / FAULT
+
+@dataclass BusHealthInfo:
+    name, channel, state, last_tx_at, last_rx_at,
+    tx_error_count, rx_error_count, bus_off
+
+@dataclass MotorHealthInfo:
+    name, bus, state, last_feedback_at, feedback_age_ms,
+    temperature, detail
+
+@dataclass HealthSnapshot:
+    timestamp, overall, buses, motors
+```
+
+#### WebSocket プロトコル拡張
+
+Server → Client `state` メッセージに `health` フィールドを同梱:
+
+```jsonc
+{
+  "type": "state",
+  "robot": "main_hand",
+  ...,
+  "health": {
+    "overall": "ok",
+    "buses": [{ "name": "m3508_bus", "channel": "can0", "state": "ok",
+                "last_rx_at": 1714377600.12, "tx_error_count": 0, "bus_off": false }],
+    "motors": [{ "name": "lift_motor", "bus": "m3508_bus", "state": "ok",
+                 "feedback_age_ms": 23.4, "temperature": 35.0 }]
+  }
+}
+```
+
+状態遷移の瞬間に push する専用イベント:
+```jsonc
+{ "type": "health_change", "level": "critical",
+  "target": "bus:m3508_bus", "from": "ok", "to": "down",
+  "message": "can0 bus_off detected" }
+```
+
+Client → Server の即時要求:
+```jsonc
+{ "type": "health_check" }
+```
+
+#### HTTP エンドポイント
+
+`GET /health` → `HealthSnapshot` を JSON で返す。`overall` に応じて HTTP ステータス 200 (OK) / 503 (DEGRADED|DOWN) を返却。CI・監視ツール・`curl` 動作確認用。
+
+#### config（既定値）
+
+```yaml
+health:
+  feedback_timeout_ms: 500     # この時間フィードバックなければ STALE
+  bus_check_interval_ms: 1000  # bus.state ポーリング周期
+  temp_warning_c: 65
+  temp_critical_c: 80
+  tx_error_threshold: 96       # CAN 標準: error_passive 境界
+```
+
+#### 実装タスク
+
+| # | ファイル | 内容 |
+|---|---|---|
+| 6-1 | `tests/test_health.py` | **テスト先行**: しきい値判定、状態遷移（ヒステリシス含む）、JSON シリアライズ |
+| 6-2 | `lib/health.py` | `BusHealth` / `MotorHealth` 列挙、`*HealthInfo` / `HealthSnapshot` dataclass、JSON 化 |
+| 6-3 | `lib/drivers/base.py` (修正) | `MotorDriver` に `has_thermal_warning()` / `has_overcurrent_warning()` / `is_fault()` のデフォルト実装を追加 |
+| 6-4 | `lib/drivers/m3508.py` (修正) | C620 フィードバックの温度・電流からフラグ判定 |
+| 6-5 | `lib/drivers/edulite05.py` (修正) | RobStride のステータス領域を解釈 |
+| 6-6 | `lib/drivers/generic.py` (修正) | フィードバック Byte7 の bit0=到達 / bit1=過電流 / bit2=過熱 を解釈 |
+| 6-7 | `tests/test_can_manager_health.py` | **テスト先行**: vcan で 受信タイムアウト → STALE、送信失敗 → DOWN 遷移、`bus.state` 反映 |
+| 6-8 | `lib/can_manager.py` (修正) | 送受信時刻記録、`bus.state` ポーリング、`health()` メソッド、`_health_check_loop` 追加 |
+| 6-9 | `tests/test_server_health.py` | **テスト先行**: WS state に `health` 同梱、`GET /health` の 200/503、`health_change` push |
+| 6-10 | `lib/server.py` (修正) | `_build_state_message` で health 同梱、`/health` ルート追加、状態遷移検出で `health_change` push |
+| 6-11 | `config/*.yaml` (修正) | `health:` セクション追加（既定値は上記） |
+| 6-12 | `web/src/components/HealthIndicator.tsx` | バス/モータごとに信号灯（緑黄赤）+ 詳細ツールチップ |
+| 6-13 | `web/src/pages/Dashboard.tsx` (修正) | ヘッダ近傍に overall 表示、警告時はトースト通知 |
+| 6-14 | `web/src/hooks/useRobotSocket.ts` (修正) | `health` パース、`health_change` ハンドリング |
+
+#### 段階的実装計画
+
+| 段階 | 成果物 | 動作確認 |
+|---|---|---|
+| ① データ型 | 6-1, 6-2 | `pytest tests/test_health.py` |
+| ② ドライバ拡張 | 6-3〜6-6 | 既存ドライバテストに warning/fault 判定を追加 |
+| ③ CANManager 拡張 | 6-7, 6-8 | vcan で送信止めて 600ms 後 STALE、shutdown で DOWN 遷移を確認 |
+| ④ サーバー統合 | 6-9, 6-10 | `aiohttp.test_utils` で `GET /health` 200/503、WS ペイロード検証 |
+| ⑤ config 反映 | 6-11 | dry-run 起動でしきい値読み込み確認 |
+| ⑥ Web UI | 6-12〜6-14 | `npm run dev` で表示。config しきい値を短くして遷移を目視 |
+
+#### リスクと回避策
+
+| リスク | 回避策 |
+|---|---|
+| ヘルスチェックループが CAN 受信を阻害 | 受動監視主体・能動 ping は明示要求時のみ |
+| しきい値が厳しすぎて誤警報（チャタリング） | config で上書き可能。STALE→OK 復帰には連続 N フレーム受信を要求 |
+| 送信エラーで `_receive_loop` が落ちる | `send_to_bus` の例外を握って health に反映、ループは継続 |
+| bus_off からの自動復帰 | `bus.recover()` を試行回数制限付きで呼び、ログに残す |
 
 ---
 

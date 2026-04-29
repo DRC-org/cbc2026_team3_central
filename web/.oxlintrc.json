@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "unicorn", "import", "jsx-a11y"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "off"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "settings": {
+    "react": { "version": "19.0" }
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "no-console": "warn",
+    "eqeqeq": "error",
+    "import/no-cycle": "error",
+    "typescript/no-explicit-any": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["vite.config.ts", "*.config.{ts,js}"],
+      "env": { "node": true }
+    }
+  ],
+  "ignorePatterns": ["dist/**", "node_modules/**"]
+}

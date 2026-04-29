@@ -1,13 +1,77 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
+@theme {
+  --font-sans:
+    "Inter", "Noto Sans JP Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, "Noto Sans JP Variable", monospace;
+
+  --color-bg: oklch(98.5% 0.005 295);
+  --color-surface: oklch(100% 0 0);
+  --color-surface-2: oklch(96.5% 0.012 295);
+  --color-border: oklch(91% 0.012 295);
+  --color-border-strong: oklch(82% 0.018 295);
+  --color-text: oklch(22% 0.03 295);
+  --color-text-muted: oklch(50% 0.025 295);
+  --color-text-subtle: oklch(65% 0.02 295);
+
+  --color-accent: oklch(55% 0.22 295);
+  --color-accent-hover: oklch(48% 0.24 295);
+  --color-accent-soft: oklch(95% 0.04 295);
+  --color-accent-fg: oklch(100% 0 0);
+
+  --color-success: oklch(60% 0.16 150);
+  --color-success-soft: oklch(95% 0.04 150);
+  --color-warning: oklch(70% 0.16 70);
+  --color-warning-soft: oklch(96% 0.04 70);
+  --color-danger: oklch(58% 0.22 25);
+  --color-danger-soft: oklch(96% 0.04 25);
+
+  --shadow-card: 0 1px 2px oklch(20% 0.05 295 / 0.04), 0 4px 12px oklch(20% 0.05 295 / 0.06);
+  --shadow-elev: 0 2px 4px oklch(20% 0.05 295 / 0.06), 0 12px 32px oklch(20% 0.05 295 / 0.1);
+  --shadow-focus: 0 0 0 3px oklch(55% 0.22 295 / 0.35);
+
+  --radius-card: 16px;
+  --radius-control: 12px;
+}
+
 html {
-  font-size: 18px;
+  font-size: 17px;
+  color-scheme: light;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
 }
 
 @keyframes e-stop-flash {
-  0%, 49% { background-color: rgba(220, 38, 38, 0.85); }
-  50%, 100% { background-color: rgba(255, 255, 255, 0.95); }
+  0%,
+  49% {
+    background-color: oklch(58% 0.22 25 / 0.88);
+  }
+  50%,
+  100% {
+    background-color: oklch(99% 0 0 / 0.95);
+  }
+}
+
+@keyframes e-stop-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
 }
 
 .e-stop-overlay {
@@ -17,9 +81,27 @@ html {
 .e-stop-stripe {
   background: repeating-linear-gradient(
     -45deg,
-    #fbbf24,
-    #fbbf24 12px,
-    #1a1a1a 12px,
-    #1a1a1a 24px
+    oklch(82% 0.16 80),
+    oklch(82% 0.16 80) 12px,
+    oklch(20% 0.02 295) 12px,
+    oklch(20% 0.02 295) 24px
   );
+}
+
+.e-stop-pulse-ring {
+  animation: e-stop-pulse-ring 1.4s ease-out infinite;
+}
+
+@keyframes connection-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.connection-dot-pulse {
+  animation: connection-dot 1.6s ease-in-out infinite;
 }

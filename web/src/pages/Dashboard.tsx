@@ -1,37 +1,51 @@
 import { Skeleton } from "@heroui/react";
-import { useRobot } from "../context/RobotContext";
-import { AppHeader } from "../components/AppHeader";
-import { SequenceProgress } from "../components/SequenceProgress";
-import { MotorSummary } from "../components/MotorSummary";
-import { EStopOverlay } from "../components/EStopOverlay";
+import { Bot } from "lucide-react";
+import { Link } from "react-router-dom";
 
-interface DashboardProps {
-  eStopActive: boolean;
-  onEStop: () => void;
-  onEStopRelease: () => void;
-}
+import { Icon } from "../components/Icon";
+import { MotorSummary } from "../components/MotorSummary";
+import { SequenceProgress } from "../components/SequenceProgress";
+import { useRobot } from "../context/RobotContext";
 
 const ROBOTS = [
-  { key: "main_hand", label: "メインハンド" },
-  { key: "sub_hand", label: "サブハンド" },
+  { key: "main_hand", label: "メインハンド", path: "/main-hand" },
+  { key: "sub_hand", label: "サブハンド", path: "/sub-hand" },
 ] as const;
 
-export function Dashboard({ eStopActive, onEStop, onEStopRelease }: DashboardProps) {
-  const { states, connected } = useRobot();
+export function Dashboard() {
+  const { states } = useRobot();
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
-      <AppHeader title="CBC2026 Team3 Dashboard" connected={connected} onEStop={onEStop} />
-
-      <main className="grid flex-1 grid-cols-1 gap-0 md:grid-cols-2">
-        {ROBOTS.map(({ key, label }) => {
+    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-10">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
+        {ROBOTS.map(({ key, label, path }) => {
           const state = states[key];
           return (
-            <div
+            <article
               key={key}
-              className="flex flex-col gap-6 border-b border-gray-200 p-8 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0"
+              className="flex flex-col gap-6 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-[var(--shadow-card)] md:p-8"
             >
-              <h2 className="text-3xl font-bold text-gray-900">{label}</h2>
+              <header className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]">
+                    <Icon icon={Bot} size={22} strokeWidth={2.4} />
+                  </span>
+                  <div>
+                    <h2 className="text-2xl font-extrabold text-[color:var(--color-text)] md:text-3xl">
+                      {label}
+                    </h2>
+                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                      {state ? "受信中" : "データ未受信"}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to={path}
+                  className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-sm font-semibold text-[color:var(--color-accent)] transition hover:bg-[color:var(--color-accent-soft)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-accent)]/30 focus-visible:outline-none"
+                >
+                  操縦画面 →
+                </Link>
+              </header>
 
               {state ? (
                 <>
@@ -46,19 +60,17 @@ export function Dashboard({ eStopActive, onEStop, onEStopRelease }: DashboardPro
                   <MotorSummary motors={state.motors} />
                 </>
               ) : (
-                <div className="space-y-4">
-                  <Skeleton className="h-6 w-3/4 rounded" />
-                  <Skeleton className="h-6 w-1/2 rounded" />
-                  <Skeleton className="h-4 w-full rounded" />
-                  <p className="text-lg text-gray-400">データ未受信</p>
+                <div className="space-y-3">
+                  <Skeleton className="h-7 w-3/4 rounded" />
+                  <Skeleton className="h-12 w-1/2 rounded" />
+                  <Skeleton className="h-3 w-full rounded" />
+                  <Skeleton className="h-16 w-full rounded" />
                 </div>
               )}
-            </div>
+            </article>
           );
         })}
-      </main>
-
-      <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
-    </div>
+      </div>
+    </main>
   );
 }

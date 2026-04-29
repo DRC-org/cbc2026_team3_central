@@ -1,5 +1,8 @@
-import { Disclosure } from "@heroui/react";
+import { AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
+import { useState } from "react";
+
 import type { MotorState } from "../hooks/useRobotSocket";
+import { Icon } from "./Icon";
 import { MotorStatus } from "./MotorStatus";
 
 interface MotorSummaryProps {
@@ -13,35 +16,69 @@ function countAnomalies(motors: Record<string, MotorState>): number {
 }
 
 export function MotorSummary({ motors }: MotorSummaryProps) {
+  const [expanded, setExpanded] = useState(false);
+  const total = Object.keys(motors).length;
   const anomalyCount = countAnomalies(motors);
 
-  if (Object.keys(motors).length === 0) {
-    return <p className="text-lg text-gray-400">モータ情報なし</p>;
+  if (total === 0) {
+    return (
+      <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-4 text-sm text-[color:var(--color-text-muted)]">
+        モータ情報なし
+      </div>
+    );
   }
 
-  if (anomalyCount === 0) {
-    return <p className="text-xl font-bold text-green-600">モータ: ✓ 全正常</p>;
-  }
+  const hasAnomaly = anomalyCount > 0;
 
   return (
-    <Disclosure>
-      <Disclosure.Heading>
-        <Disclosure.Trigger className="text-xl font-bold text-amber-600 hover:underline">
-          ⚠ 異常 {anomalyCount} 件
-          <Disclosure.Indicator />
-        </Disclosure.Trigger>
-      </Disclosure.Heading>
-      <Disclosure.Content>
-        <Disclosure.Body>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(motors)
-              .filter(([, m]) => m.temp >= TEMP_WARNING)
-              .map(([name, state]) => (
-                <MotorStatus key={name} name={name} state={state} />
-              ))}
-          </div>
-        </Disclosure.Body>
-      </Disclosure.Content>
-    </Disclosure>
+    <div className="flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-card)] border px-4 py-3 text-left transition focus-visible:ring-4 focus-visible:outline-none ${
+          hasAnomaly
+            ? "border-[color:var(--color-warning)]/40 bg-[color:var(--color-warning-soft)] focus-visible:ring-[color:var(--color-warning)]/30"
+            : "border-[color:var(--color-success)]/30 bg-[color:var(--color-success-soft)] focus-visible:ring-[color:var(--color-success)]/30"
+        }`}
+      >
+        <span className="flex items-center gap-3">
+          <span
+            className={`flex h-9 w-9 items-center justify-center rounded-full ${
+              hasAnomaly
+                ? "bg-[color:var(--color-warning)]/20 text-[color:oklch(45%_0.16_70)]"
+                : "bg-[color:var(--color-success)]/20 text-[color:oklch(35%_0.16_150)]"
+            }`}
+          >
+            <Icon icon={hasAnomaly ? AlertTriangle : CheckCircle2} size={18} strokeWidth={2.5} />
+          </span>
+          <span className="flex flex-col">
+            <span
+              className={`text-sm font-bold ${
+                hasAnomaly ? "text-[color:oklch(45%_0.16_70)]" : "text-[color:oklch(35%_0.16_150)]"
+              }`}
+            >
+              {hasAnomaly ? `異常 ${anomalyCount} 件` : `モータ全 ${total} 台 正常`}
+            </span>
+            <span className="text-xs text-[color:var(--color-text-muted)]">
+              {expanded ? "クリックで折りたたみ" : "クリックで詳細表示"}
+            </span>
+          </span>
+        </span>
+        <Icon
+          icon={ChevronDown}
+          size={20}
+          className={`shrink-0 text-[color:var(--color-text-muted)] transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {expanded ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Object.entries(motors).map(([name, state]) => (
+            <MotorStatus key={name} name={name} state={state} />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
