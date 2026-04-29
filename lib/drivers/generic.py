@@ -25,12 +25,28 @@ class CommandType(IntEnum):
 class GenericDriver(MotorDriver):
     """自作モータドライバ(DC モータ/サーボ)用の汎用 CAN ドライバ。"""
 
-    def __init__(self, name: str, can_id: int) -> None:
+    # 動作確認の判定許容値 (control_type 別)
+    # POSITION: 0.1deg 単位フィードバック → 1.0deg 余裕
+    # VELOCITY: 5rpm 程度のリップルを許容
+    # DUTY: |velocity| > 10rpm で「回った」と見なす
+    _CHECK_POSITION_TOLERANCE_DEG = 1.0
+    _CHECK_VELOCITY_TOLERANCE_RPM = 5.0
+    _CHECK_DUTY_ROTATION_RPM = 10.0
+
+    def __init__(
+        self,
+        name: str,
+        can_id: int,
+        *,
+        control_type: ControlMode = ControlMode.POSITION,
+    ) -> None:
         super().__init__(name, can_id)
         # フィードバック Byte7 の bit1/bit2 は MotorState に持たせず、ドライバ側で保持する
         # (MotorState は frozen dataclass で他ドライバ共通のため、汎用化を避けて専用属性に分離)
         self._overcurrent_flag: bool = False
         self._overheat_flag: bool = False
+        # 動作確認や reset の指令を出す制御モード。config から渡される値で上書き可能。
+        self.control_type: ControlMode = control_type
 
     # ---- CAN ID ユーティリティ ----
 
@@ -111,3 +127,59 @@ class GenericDriver(MotorDriver):
     def is_fault(self) -> bool:
         # 過熱は復帰不能リスクが高いので FAULT 扱い (シーケンス停止対象)
         return self._overheat_flag
+
+    # ------------------------------------------------------------------ #
+    #  動作確認 (Phase 6 段階⑦)
+    # ------------------------------------------------------------------ #
+
+    def check_command(self, *, magnitude: float = 0.1) -> tuple[can.Message, dict]:
+        msg = self.encode_target(self.control_type, magnitude)
+        context = {"target": float(magnitude), "mode": self.control_type.value}
+        return msg, context
+
+    def evaluate_check_result(
+        self,
+        state: MotorState,
+        context: dict,
+        *,
+        tolerance: float | None = None,
+    ) -> tuple[bool, str | None]:
+        target = context["target"]
+        mode = context["mode"]
+
+        if mode == ControlMode.POSITION.value:
+            tol = tolerance if tolerance is not None else self._CHECK_POSITION_TOLERANCE_DEG
+            position_ok = state.reached and abs(state.position - target) <= tol
+            if position_ok:
+                return True, self._overflow_note()
+            return False, (
+                f"目標 {target:.2f}deg, 観測 {state.position:.2f}deg (reached={state.reached})"
+            )
+
+        if mode == ControlMode.VELOCITY.value:
+            tol = tolerance if tolerance is not None else self._CHECK_VELOCITY_TOLERANCE_RPM
+            if abs(state.velocity - target) <= tol:
+                return True, self._overflow_note()
+            return False, (f"目標 {target:.1f}rpm, 観測 {state.velocity:.1f}rpm")
+
+        if mode == ControlMode.DUTY.value:
+            if abs(state.velocity) > self._CHECK_DUTY_ROTATION_RPM:
+                return True, self._overflow_note()
+            return False, (
+                f"回転検出なし (target duty={target:.2f}, velocity={state.velocity:.1f}rpm)"
+            )
+
+        # 未知の制御モード (将来拡張時のフォールバック)
+        return False, f"未対応の制御モード: {mode}"
+
+    def reset_after_check(self) -> can.Message:
+        return self.encode_target(self.control_type, 0.0)
+
+    def _overflow_note(self) -> str | None:
+        """過電流/過熱フラグが立っている場合の注釈を返す (PASSED でも残す)。"""
+        notes: list[str] = []
+        if self._overcurrent_flag:
+            notes.append("過電流フラグあり")
+        if self._overheat_flag:
+            notes.append("過熱フラグあり")
+        return ", ".join(notes) if notes else None

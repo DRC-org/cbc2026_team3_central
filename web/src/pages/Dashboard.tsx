@@ -5,6 +5,8 @@ import { Link } from "react-router-dom";
 
 import { HealthIndicator } from "../components/HealthIndicator";
 import { Icon } from "../components/Icon";
+import { MotorCheckButton } from "../components/MotorCheckButton";
+import { MotorCheckPanel } from "../components/MotorCheckPanel";
 import { MotorSummary } from "../components/MotorSummary";
 import { SequenceProgress } from "../components/SequenceProgress";
 import { useRobot } from "../context/RobotContext";
@@ -88,6 +90,8 @@ function HealthToast({ toast, onDismiss }: { toast: ToastState; onDismiss: () =>
 export function Dashboard() {
   const { states, healthEvents } = useRobot();
   const [toast, setToast] = useState<ToastState | null>(null);
+  // ロボット名 → パネル開閉。ボタン押下で開く、閉じるは手動
+  const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({});
 
   const overall = useMemo(
     () => worstOverall(ROBOTS.map(({ key }) => states[key]?.health)),
@@ -170,6 +174,19 @@ export function Dashboard() {
                     large
                   />
                   <HealthIndicator variant="card" health={state.health} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <MotorCheckButton
+                      robotName={key}
+                      onPanelOpen={() => setPanelOpen((prev) => ({ ...prev, [key]: true }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPanelOpen((prev) => ({ ...prev, [key]: true }))}
+                      className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--color-text-muted)] transition hover:bg-[color:var(--color-surface-2)] hover:text-[color:var(--color-text)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-accent)]/30 focus-visible:outline-none"
+                    >
+                      結果を表示
+                    </button>
+                  </div>
                   <MotorSummary motors={state.motors} />
                 </>
               ) : (
@@ -184,6 +201,15 @@ export function Dashboard() {
           );
         })}
       </div>
+
+      {ROBOTS.map(({ key }) => (
+        <MotorCheckPanel
+          key={key}
+          robotName={key}
+          isOpen={Boolean(panelOpen[key])}
+          onOpenChange={(open) => setPanelOpen((prev) => ({ ...prev, [key]: open }))}
+        />
+      ))}
 
       <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2 md:right-6 md:bottom-6">
         {toast ? <HealthToast toast={toast} onDismiss={() => setToast(null)} /> : null}

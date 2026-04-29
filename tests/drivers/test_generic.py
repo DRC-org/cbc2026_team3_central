@@ -201,3 +201,127 @@ class TestHealth:
         self._feed(flags=0b11111000)
         assert self.drv.has_overcurrent_warning() is False
         assert self.drv.is_fault() is False
+
+
+class TestMotorCheck:
+    """アクチュエータ動作確認 API (Phase 6 段階⑦)。"""
+
+    def _feed(
+        self,
+        drv: GenericDriver,
+        *,
+        position_dg: int = 0,
+        velocity_rpm: int = 0,
+        current_ma: int = 0,
+        temp: int = 25,
+        flags: int = 0x00,
+    ) -> None:
+        # フィードバック byte0-1 は 0.1deg 単位 (raw_pos * 0.1 = position)
+        data = bytearray(8)
+        struct.pack_into("<h", data, 0, position_dg)
+        struct.pack_into("<h", data, 2, velocity_rpm)
+        struct.pack_into("<h", data, 4, current_ma)
+        data[6] = temp
+        data[7] = flags
+        msg = can.Message(arbitration_id=0x101, data=bytes(data), is_extended_id=False)
+        drv.update_state(msg)
+
+    def test_check_command_default_position(self):
+        drv = GenericDriver("test_motor", 0x01)
+        msg, context = drv.check_command(magnitude=0.1)
+        # control_type デフォルトは POSITION
+        assert msg.data[0] == 0  # position
+        value = struct.unpack_from("<f", msg.data, 2)[0]
+        assert value == pytest.approx(0.1)
+        assert context["target"] == pytest.approx(0.1)
+        assert context["mode"] == ControlMode.POSITION.value
+
+    def test_check_command_velocity_mode(self):
+        drv = GenericDriver("test_motor", 0x01, control_type=ControlMode.VELOCITY)
+        msg, context = drv.check_command(magnitude=50.0)
+        assert msg.data[0] == 1  # velocity
+        value = struct.unpack_from("<f", msg.data, 2)[0]
+        assert value == pytest.approx(50.0)
+        assert context["mode"] == ControlMode.VELOCITY.value
+
+    def test_check_command_duty_mode(self):
+        drv = GenericDriver("test_motor", 0x01, control_type=ControlMode.DUTY)
+        msg, _context = drv.check_command(magnitude=0.3)
+        assert msg.data[0] == 2  # duty
+        value = struct.unpack_from("<f", msg.data, 2)[0]
+        assert value == pytest.approx(0.3)
+
+    def test_evaluate_position_passed_when_reached_and_within_tolerance(self):
+        drv = GenericDriver("test_motor", 0x01)
+        _, context = drv.check_command(magnitude=10.0)
+        # position=10.0deg, reached フラグ立ち上がり
+        self._feed(drv, position_dg=100, flags=0x01)
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is True
+        assert detail is None
+
+    def test_evaluate_position_failed_when_not_reached(self):
+        drv = GenericDriver("test_motor", 0x01)
+        _, context = drv.check_command(magnitude=10.0)
+        # 目標 10.0deg に対して 5.0deg しか動いていない (許容 1.0 超え)
+        self._feed(drv, position_dg=50, flags=0x00)
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is False
+        assert detail is not None
+
+    def test_evaluate_velocity_passed(self):
+        drv = GenericDriver("test_motor", 0x01, control_type=ControlMode.VELOCITY)
+        _, context = drv.check_command(magnitude=100.0)
+        # velocity=100rpm (許容 5)
+        self._feed(drv, velocity_rpm=98)
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is True
+        assert detail is None
+
+    def test_evaluate_velocity_failed(self):
+        drv = GenericDriver("test_motor", 0x01, control_type=ControlMode.VELOCITY)
+        _, context = drv.check_command(magnitude=100.0)
+        self._feed(drv, velocity_rpm=20)
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is False
+        assert detail is not None
+
+    def test_evaluate_duty_passed_when_rotation_detected(self):
+        drv = GenericDriver("test_motor", 0x01, control_type=ControlMode.DUTY)
+        _, context = drv.check_command(magnitude=0.3)
+        # 何らかの回転が観測されれば PASSED (|velocity| > 10)
+        self._feed(drv, velocity_rpm=50)
+        passed, _ = drv.evaluate_check_result(drv.state, context)
+        assert passed is True
+
+    def test_evaluate_duty_failed_when_no_rotation(self):
+        drv = GenericDriver("test_motor", 0x01, control_type=ControlMode.DUTY)
+        _, context = drv.check_command(magnitude=0.3)
+        self._feed(drv, velocity_rpm=2)
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is False
+        assert detail is not None
+
+    def test_evaluate_passed_with_overcurrent_flag_adds_detail(self):
+        drv = GenericDriver("test_motor", 0x01)
+        _, context = drv.check_command(magnitude=10.0)
+        # 過電流フラグつき + 目標到達 → PASSED だが detail に注釈
+        self._feed(drv, position_dg=100, flags=0b00000011)
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is True
+        assert detail is not None
+        assert "過電流" in detail
+
+    def test_reset_after_check_sends_zero(self):
+        drv = GenericDriver("test_motor", 0x01)
+        msg = drv.reset_after_check()
+        assert msg.data[0] == 0  # POSITION
+        value = struct.unpack_from("<f", msg.data, 2)[0]
+        assert value == pytest.approx(0.0)
+
+    def test_reset_after_check_velocity_mode_sends_zero(self):
+        drv = GenericDriver("test_motor", 0x01, control_type=ControlMode.VELOCITY)
+        msg = drv.reset_after_check()
+        assert msg.data[0] == 1  # VELOCITY
+        value = struct.unpack_from("<f", msg.data, 2)[0]
+        assert value == pytest.approx(0.0)

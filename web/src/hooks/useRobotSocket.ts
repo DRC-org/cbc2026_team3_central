@@ -50,6 +50,64 @@ export interface HealthChangeEvent {
   receivedAt: number;
 }
 
+export type MotorCheckResult = "pending" | "running" | "passed" | "failed" | "timeout" | "skipped";
+export type MotorCheckOverall = "running" | "ok" | "partial" | "failed";
+
+export interface MotorCheckRecord {
+  motor: string;
+  bus: string;
+  started_at: number;
+  finished_at: number | null;
+  result: MotorCheckResult;
+  expected: number;
+  observed: number | null;
+  detail: string | null;
+}
+
+export interface CheckRunSnapshot {
+  robot: string;
+  started_at: number;
+  finished_at: number | null;
+  overall: MotorCheckOverall;
+  records: MotorCheckRecord[];
+}
+
+export type MotorCheckStatus = "idle" | "running" | "completed" | "error";
+
+export interface MotorCheckState {
+  status: MotorCheckStatus;
+  current: string | null;
+  progress: { index: number; total: number } | null;
+  // 受信した record を時系列で。同じ motor の重複は最新で上書き
+  records: MotorCheckRecord[];
+  snapshot: CheckRunSnapshot | null;
+  error: string | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
+function emptyMotorCheckState(): MotorCheckState {
+  return {
+    status: "idle",
+    current: null,
+    progress: null,
+    records: [],
+    snapshot: null,
+    error: null,
+    startedAt: null,
+    finishedAt: null,
+  };
+}
+
+// motor 名で重複した record を最新で上書きしつつ、初出は末尾に追加して順序を保つ
+function mergeRecord(records: MotorCheckRecord[], next: MotorCheckRecord): MotorCheckRecord[] {
+  const idx = records.findIndex((r) => r.motor === next.motor);
+  if (idx === -1) return [...records, next];
+  const copy = records.slice();
+  copy[idx] = next;
+  return copy;
+}
+
 export interface RobotState {
   robot: string;
   sequence: string;
@@ -67,6 +125,7 @@ interface UseRobotSocketReturn {
   connected: boolean;
   eStopActive: boolean;
   healthEvents: HealthChangeEvent[];
+  motorChecks: Record<string, MotorCheckState>;
   setEStopActive: (active: boolean) => void;
   send: (data: object) => void;
 }
@@ -81,6 +140,7 @@ export function useRobotSocket(url: string = DEFAULT_URL): UseRobotSocketReturn 
   const [connected, setConnected] = useState(false);
   const [eStopActive, setEStopActive] = useState(false);
   const [healthEvents, setHealthEvents] = useState<HealthChangeEvent[]>([]);
+  const [motorChecks, setMotorChecks] = useState<Record<string, MotorCheckState>>({});
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -124,6 +184,88 @@ export function useRobotSocket(url: string = DEFAULT_URL): UseRobotSocketReturn 
             const next = [evt, ...prev];
             return next.length > HEALTH_EVENT_BUFFER ? next.slice(0, HEALTH_EVENT_BUFFER) : next;
           });
+        } else if (msg.type === "motor_check_progress" && typeof msg.robot === "string") {
+          const robot: string = msg.robot;
+          const current: string | null = typeof msg.current === "string" ? msg.current : null;
+          const index: number = typeof msg.index === "number" ? msg.index : 0;
+          const total: number = typeof msg.total === "number" ? msg.total : 0;
+          setMotorChecks((prev) => {
+            const base = prev[robot] ?? emptyMotorCheckState();
+            // 進捗の最初を受け取った時点で startedAt を確定する
+            const startedAt = base.startedAt ?? Date.now() / 1000;
+            return {
+              ...prev,
+              [robot]: {
+                ...base,
+                status: "running",
+                current,
+                progress: { index, total },
+                error: null,
+                snapshot: null,
+                finishedAt: null,
+                startedAt,
+              },
+            };
+          });
+        } else if (
+          msg.type === "motor_check_record" &&
+          typeof msg.robot === "string" &&
+          msg.record &&
+          typeof msg.record === "object"
+        ) {
+          const robot: string = msg.robot;
+          const record = msg.record as MotorCheckRecord;
+          setMotorChecks((prev) => {
+            const base = prev[robot] ?? emptyMotorCheckState();
+            return {
+              ...prev,
+              [robot]: {
+                ...base,
+                records: mergeRecord(base.records, record),
+              },
+            };
+          });
+        } else if (
+          msg.type === "motor_check_done" &&
+          typeof msg.robot === "string" &&
+          msg.snapshot &&
+          typeof msg.snapshot === "object"
+        ) {
+          const robot: string = msg.robot;
+          const snapshot = msg.snapshot as CheckRunSnapshot;
+          setMotorChecks((prev) => {
+            const base = prev[robot] ?? emptyMotorCheckState();
+            return {
+              ...prev,
+              [robot]: {
+                ...base,
+                status: "completed",
+                snapshot,
+                // snapshot.records が正となる。途中受信との差分を埋めるため上書き
+                records: snapshot.records ?? base.records,
+                current: null,
+                error: null,
+                startedAt: snapshot.started_at ?? base.startedAt,
+                finishedAt: snapshot.finished_at ?? Date.now() / 1000,
+              },
+            };
+          });
+        } else if (msg.type === "motor_check_error" && typeof msg.robot === "string") {
+          const robot: string = msg.robot;
+          const message: string = typeof msg.message === "string" ? msg.message : "unknown error";
+          setMotorChecks((prev) => {
+            const base = prev[robot] ?? emptyMotorCheckState();
+            return {
+              ...prev,
+              [robot]: {
+                ...base,
+                status: "error",
+                error: message,
+                current: null,
+                finishedAt: Date.now() / 1000,
+              },
+            };
+          });
         }
       } catch {
         // 不正な JSON は無視
@@ -145,5 +287,13 @@ export function useRobotSocket(url: string = DEFAULT_URL): UseRobotSocketReturn 
     }
   }, []);
 
-  return { states, connected, eStopActive, healthEvents, setEStopActive, send };
+  return {
+    states,
+    connected,
+    eStopActive,
+    healthEvents,
+    motorChecks,
+    setEStopActive,
+    send,
+  };
 }

@@ -132,3 +132,53 @@ class Edulite05Driver(MotorDriver):
 
     def has_overcurrent_warning(self) -> bool:
         return abs(self._state.current) >= self._OVERCURRENT_TORQUE_THRESHOLD
+
+    # ------------------------------------------------------------------ #
+    #  動作確認 (Phase 6 段階⑦)
+    # ------------------------------------------------------------------ #
+    # 位置制御で現在位置から微小角度ぶん追加で動かし、追従性を確認する。
+    # PD ゲインは外乱に強い中域 (kp=20, kd=0.5) を採用、トルクは 0 に設定して
+    # 暴走を防ぐ。
+    _CHECK_DEFAULT_KP = 20.0
+    _CHECK_DEFAULT_KD = 0.5
+    _CHECK_DEFAULT_TOLERANCE_DEG = 1.0
+
+    def check_command(self, *, magnitude: float = 5.0) -> tuple[can.Message, dict]:
+        delta_rad = math.radians(magnitude)
+        # state がまだ届いていない場合 (position=0.0) は 0 基準として動作確認する
+        p_des = self._state.position + delta_rad
+        msg = self.encode_mit(
+            p_des=p_des,
+            v_des=0.0,
+            kp=self._CHECK_DEFAULT_KP,
+            kd=self._CHECK_DEFAULT_KD,
+            torque=0.0,
+        )
+        context = {"target": p_des, "magnitude_deg": float(magnitude)}
+        return msg, context
+
+    def evaluate_check_result(
+        self,
+        state: MotorState,
+        context: dict,
+        *,
+        tolerance: float | None = None,
+    ) -> tuple[bool, str | None]:
+        target = context["target"]
+        if tolerance is not None:
+            tol = tolerance
+        else:
+            tol = math.radians(self._CHECK_DEFAULT_TOLERANCE_DEG)
+        error = abs(state.position - target)
+
+        if error <= tol:
+            return True, None
+
+        return False, (
+            f"目標 {math.degrees(target):.2f}deg, 観測 {math.degrees(state.position):.2f}deg"
+        )
+
+    def reset_after_check(self) -> can.Message:
+        # 動作確認前の位置を保持していないので、安全側に倒してモータを無効化する
+        # MotorCheckRunner は次のモータへ進む前にこのメッセージを必ず送る
+        return self.encode_disable()

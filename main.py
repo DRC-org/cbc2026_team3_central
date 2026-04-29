@@ -37,6 +37,17 @@ _DEFAULT_HEALTH: dict[str, float | int] = {
     "tx_error_threshold": 96,
 }
 
+# motor_check セクションのデフォルト値。
+# lib/motor_check.py の DEFAULT_PER_MOTOR_TIMEOUT_MS / DEFAULT_MAGNITUDES と同期する。
+_DEFAULT_MOTOR_CHECK: dict[str, object] = {
+    "per_motor_timeout_ms": 1500.0,
+    "default_magnitude": {
+        "m3508": 500.0,
+        "edulite05": 5.0,
+        "generic": 0.1,
+    },
+}
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="CBC2026 Team3 中央制御プログラム")
@@ -110,6 +121,110 @@ def _load_health_config(configs: list[dict]) -> dict[str, float | int]:
                 )
 
     return result
+
+
+def _load_motor_check_config(configs: list[dict]) -> dict[str, object]:
+    """全 config の motor_check セクションを集約してアクチュエータ動作確認設定を返す。
+
+    運用上の決定事項 (health と同じ方針):
+    - 最初に見つかった motor_check セクションを基本値として採用する
+    - 後続の config に異なる値があれば WARNING ログを出した上で最初の値を維持する
+    - yaml に存在しないキーは _DEFAULT_MOTOR_CHECK で補完する
+    """
+    default_magnitude_default: dict[str, float] = dict(
+        _DEFAULT_MOTOR_CHECK["default_magnitude"]  # type: ignore[arg-type]
+    )
+    result: dict[str, object] = {
+        "per_motor_timeout_ms": _DEFAULT_MOTOR_CHECK["per_motor_timeout_ms"],
+        "default_magnitude": default_magnitude_default,
+    }
+    first_mc: dict | None = None
+    first_robot: str | None = None
+
+    for cfg in configs:
+        mc = cfg.get("motor_check")
+        if not isinstance(mc, dict):
+            continue
+
+        if first_mc is None:
+            first_mc = mc
+            first_robot = cfg.get("robot_name")
+            if "per_motor_timeout_ms" in mc:
+                result["per_motor_timeout_ms"] = float(mc["per_motor_timeout_ms"])
+            dm = mc.get("default_magnitude")
+            if isinstance(dm, dict):
+                magnitude_map: dict[str, float] = result["default_magnitude"]  # type: ignore[assignment]
+                for key, value in dm.items():
+                    magnitude_map[key] = float(value)
+            continue
+
+        # 2 つ目以降の motor_check セクション: 最初の値と比較して衝突を検出
+        first_timeout = first_mc.get(
+            "per_motor_timeout_ms", _DEFAULT_MOTOR_CHECK["per_motor_timeout_ms"]
+        )
+        this_timeout = mc.get("per_motor_timeout_ms", _DEFAULT_MOTOR_CHECK["per_motor_timeout_ms"])
+        if first_timeout != this_timeout:
+            logger.warning(
+                "motor_check.per_motor_timeout_ms が config 間で不一致 "
+                "(%s=%s, %s=%s)。前者を採用します。",
+                first_robot,
+                first_timeout,
+                cfg.get("robot_name"),
+                this_timeout,
+            )
+
+        first_dm = first_mc.get("default_magnitude") or {}
+        this_dm = mc.get("default_magnitude") or {}
+        all_keys = set(first_dm) | set(this_dm)
+        for key in all_keys:
+            first_val = first_dm.get(key, _DEFAULT_MOTOR_CHECK["default_magnitude"].get(key))  # type: ignore[union-attr]
+            this_val = this_dm.get(key, _DEFAULT_MOTOR_CHECK["default_magnitude"].get(key))  # type: ignore[union-attr]
+            if first_val != this_val:
+                logger.warning(
+                    "motor_check.default_magnitude.%s が config 間で不一致 "
+                    "(%s=%s, %s=%s)。前者を採用します。",
+                    key,
+                    first_robot,
+                    first_val,
+                    cfg.get("robot_name"),
+                    this_val,
+                )
+
+    return result
+
+
+def _collect_per_motor_overrides(
+    configs: list[dict],
+) -> dict[str, dict[str, float]]:
+    """各 config の motors[name].motor_check を集約してフラットな辞書に変換する。
+
+    返り値の例:
+        {
+            "lift_motor": {"magnitude": 800.0, "timeout_ms": 2000.0},
+            "gripper": {"timeout_ms": 2500.0},
+        }
+
+    モータ名衝突は実機構成では起きない想定だが、もし発生した場合は後勝ちとなる。
+    """
+    overrides: dict[str, dict[str, float]] = {}
+    for cfg in configs:
+        motors_cfg = cfg.get("motors") or {}
+        if not isinstance(motors_cfg, dict):
+            continue
+        for motor_name, motor_cfg in motors_cfg.items():
+            if not isinstance(motor_cfg, dict):
+                continue
+            mc = motor_cfg.get("motor_check")
+            if not isinstance(mc, dict):
+                continue
+            entry: dict[str, float] = {}
+            if "magnitude" in mc:
+                entry["magnitude"] = float(mc["magnitude"])
+            if "timeout_ms" in mc:
+                entry["timeout_ms"] = float(mc["timeout_ms"])
+            if entry:
+                overrides[motor_name] = entry
+    return overrides
 
 
 def _create_bus(channel: str, *, dry_run: bool) -> can.Bus:
@@ -199,7 +314,23 @@ async def main() -> None:
     health_thresholds = _load_health_config([cfg for _, cfg in loaded])
     logger.info("health しきい値: %s", health_thresholds)
 
-    server = RobotServer(host=args.host, port=args.port, **health_thresholds)
+    motor_check_settings = _load_motor_check_config([cfg for _, cfg in loaded])
+    motor_check_overrides = _collect_per_motor_overrides([cfg for _, cfg in loaded])
+    logger.info(
+        "motor_check 設定: per_motor_timeout_ms=%s default_magnitude=%s overrides=%s",
+        motor_check_settings["per_motor_timeout_ms"],
+        motor_check_settings["default_magnitude"],
+        motor_check_overrides,
+    )
+
+    server = RobotServer(
+        host=args.host,
+        port=args.port,
+        **health_thresholds,
+        motor_check_per_motor_timeout_ms=motor_check_settings["per_motor_timeout_ms"],
+        motor_check_default_magnitude=motor_check_settings["default_magnitude"],
+        motor_check_per_motor_overrides=motor_check_overrides,
+    )
     can_managers: list[CANManager] = []
 
     # 2 パス目: 既存の robot 登録ロジック

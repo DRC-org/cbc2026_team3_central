@@ -208,3 +208,104 @@ class TestHealth:
         # 現状ステータスフラグを解釈していないため常に False
         self._feed(drv, torque=11.9, temp_c=90.0)
         assert drv.is_fault() is False
+
+
+class TestMotorCheck:
+    """アクチュエータ動作確認 API (Phase 6 段階⑦)。"""
+
+    def _feed(
+        self,
+        drv: Edulite05Driver,
+        *,
+        position_rad: float = 0.0,
+        velocity: float = 0.0,
+        torque: float = 0.0,
+        temp_c: float = 25.0,
+    ) -> None:
+        pos_raw = Edulite05Driver.float_to_uint16(position_rad, -4 * math.pi, 4 * math.pi)
+        vel_raw = Edulite05Driver.float_to_uint16(velocity, -30.0, 30.0)
+        torque_raw = Edulite05Driver.float_to_uint16(torque, -12.0, 12.0)
+        temp_raw = int(temp_c * 10)
+        data = struct.pack(">HHHH", pos_raw, vel_raw, torque_raw, temp_raw)
+        data_area2 = (2 << 14) | (0 << 8) | drv.can_id
+        arb_id = Edulite05Driver.build_can_id(0x02, data_area2, 0x00)
+        msg = can.Message(arbitration_id=arb_id, data=data, is_extended_id=True)
+        drv.update_state(msg)
+
+    def test_check_command_targets_current_position_plus_delta(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        # 現在位置を 0.5 rad に設定 (uint16 マッピングで丸めが入るため state 側を基準に判定)
+        self._feed(drv, position_rad=0.5)
+        baseline = drv.state.position
+
+        msg, context = drv.check_command(magnitude=5.0)
+
+        # context["target"] = state の現在位置 + 5deg(rad)
+        expected_target = baseline + math.radians(5.0)
+        assert context["target"] == pytest.approx(expected_target)
+        assert context["magnitude_deg"] == pytest.approx(5.0)
+
+        # MIT フレームの上位 2 バイトは p_des (uint16 マッピング)
+        p_raw_actual = struct.unpack(">H", msg.data[0:2])[0]
+        p_raw_expected = Edulite05Driver.float_to_uint16(expected_target, -4 * math.pi, 4 * math.pi)
+        assert p_raw_actual == p_raw_expected
+
+        # CAN ID 上位は MIT type
+        comm_type, _da2, dest = Edulite05Driver.parse_can_id(msg.arbitration_id)
+        assert comm_type == Edulite05Driver.COMM_TYPE_MIT
+        assert dest == drv.can_id
+
+    def test_check_command_without_state_uses_zero_baseline(self):
+        # state が一度も届いていない場合は現在位置 0 として目標を組み立てる
+        drv = Edulite05Driver("m1", can_id=0x05)
+        _, context = drv.check_command(magnitude=5.0)
+        assert context["target"] == pytest.approx(math.radians(5.0))
+
+    def test_evaluate_passed_when_within_tolerance(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        self._feed(drv, position_rad=0.0)
+        _, context = drv.check_command(magnitude=5.0)
+
+        # 目標位置に到達 (誤差 0.5deg < 1.0deg)
+        target = context["target"]
+        observed_rad = target - math.radians(0.5)
+        self._feed(drv, position_rad=observed_rad)
+
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is True
+        assert detail is None
+
+    def test_evaluate_failed_when_outside_tolerance(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        self._feed(drv, position_rad=0.0)
+        _, context = drv.check_command(magnitude=5.0)
+
+        # 許容 1deg を超える誤差 (3deg)
+        target = context["target"]
+        observed_rad = target - math.radians(3.0)
+        self._feed(drv, position_rad=observed_rad)
+
+        passed, detail = drv.evaluate_check_result(drv.state, context)
+        assert passed is False
+        assert detail is not None
+        # detail に目標と観測値が含まれること
+        assert "deg" in detail
+
+    def test_evaluate_with_explicit_tolerance(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        _, context = drv.check_command(magnitude=5.0)
+        # 5deg ぴったり外れる場合に許容 10deg なら PASSED
+        observed = context["target"] - math.radians(5.0)
+        self._feed(drv, position_rad=observed)
+
+        passed, _ = drv.evaluate_check_result(drv.state, context, tolerance=math.radians(10.0))
+        assert passed is True
+
+    def test_reset_after_check_returns_disable(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        msg = drv.reset_after_check()
+        comm_type, _, dest = Edulite05Driver.parse_can_id(msg.arbitration_id)
+        assert comm_type == Edulite05Driver.COMM_TYPE_DISABLE
+        assert dest == drv.can_id
+        assert msg.is_extended_id is True
+        assert msg.data == bytes(8)

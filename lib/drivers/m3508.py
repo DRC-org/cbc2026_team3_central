@@ -6,6 +6,10 @@ import can
 
 from lib.drivers.base import ControlMode, MotorDriver, MotorState
 
+# 動作確認時に「回転検出なし」とみなす rpm のしきい値。
+# C620 のフィードバックノイズ・微小逆起電力を除去するため小さめに固定。
+_CHECK_VELOCITY_DEAD_BAND_RPM = 50.0
+
 _CURRENT_MIN = -16384
 _CURRENT_MAX = 16384
 _TX_ARBITRATION_ID = 0x200
@@ -60,6 +64,41 @@ class M3508Driver(MotorDriver):
 
     def has_overcurrent_warning(self) -> bool:
         return abs(self._state.current) > _OVERCURRENT_THRESHOLD_MA
+
+    # ------------------------------------------------------------------ #
+    #  動作確認 (Phase 6 段階⑦)
+    # ------------------------------------------------------------------ #
+    # M3508 は電流制御専用のため、check は微小電流を 1 投入し
+    # フィードバック rpm の符号一致で「指示が伝わって回転した」ことを確認する
+
+    def check_command(self, *, magnitude: float = 500.0) -> tuple[can.Message, dict]:
+        msg = self.encode_target(ControlMode.CURRENT, magnitude)
+        context = {"target": float(magnitude), "mode": "current"}
+        return msg, context
+
+    def evaluate_check_result(
+        self,
+        state: MotorState,
+        context: dict,
+        *,
+        tolerance: float | None = None,
+    ) -> tuple[bool, str | None]:
+        target = context["target"]
+
+        if abs(state.velocity) < _CHECK_VELOCITY_DEAD_BAND_RPM:
+            return False, (
+                f"回転検出なし (target={target:.0f}mA, velocity={state.velocity:.1f}rpm)"
+            )
+
+        # 指令電流符号と rpm 符号が一致 → 駆動方向が正しい
+        if (target > 0 and state.velocity > 0) or (target < 0 and state.velocity < 0):
+            return True, None
+
+        return False, (f"回転方向不一致 (target={target:.0f}mA, velocity={state.velocity:.1f}rpm)")
+
+    def reset_after_check(self) -> can.Message:
+        # 駆動状態を残さないよう必ず 0 mA を再送する
+        return self.encode_target(ControlMode.CURRENT, 0)
 
     @staticmethod
     def encode_current_frame(currents: list[int]) -> can.Message:

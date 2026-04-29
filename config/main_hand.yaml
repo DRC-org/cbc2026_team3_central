@@ -12,12 +12,24 @@ health:
   tx_error_threshold: 96     # CAN error_passive 境界
   # bus_check_interval_ms は将来の独立ヘルスチェックループ用 (現状未使用)
 
+motor_check:
+  per_motor_timeout_ms: 1500   # 1 モータあたりのタイムアウト
+  default_magnitude:
+    m3508: 500                 # mA
+    edulite05: 5.0             # deg
+    generic: 0.1               # POSITION/VELOCITY/DUTY 共通の小さい目標値
+  # tolerance はドライバ側のデフォルト (1deg / 5rpm 等) を採用。
+  # 個別上書きしたい場合は motors[name].motor_check で行う。
+
 motors:
   # DJI M3508 (C620 ESC) — CAN Standard Frame
   # lift_motor:
   #   driver: m3508
   #   bus: m3508_bus
   #   can_id: 1
+  #   motor_check:           # 個別上書き例 (任意)
+  #     magnitude: 800        # この個体のみ 800mA で動作確認
+  #     timeout_ms: 2000
 
   # RobStride EDULITE 05 — CAN Extended Frame
   # arm_joint:
@@ -25,6 +37,9 @@ motors:
   #   bus: edulite_bus
   #   can_id: 1
   #   mode: position
+  #   motor_check:           # 個別上書き例 (任意)
+  #     magnitude: 7.5        # この個体のみ 7.5deg で動作確認
+  #     timeout_ms: 2000
 
   # 自作モータドライバ — CAN Standard Frame
   # gripper:
@@ -32,3 +47,6 @@ motors:
   #   bus: generic_bus
   #   can_id: 0x01
   #   control_type: position
+  #   motor_check:           # 個別上書き例 (任意)
+  #     magnitude: 0.2
+  #     timeout_ms: 2000

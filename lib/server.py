@@ -15,10 +15,13 @@ from lib.drivers.generic import GenericDriver
 from lib.health import (
     BusHealth,
     BusHealthInfo,
+    CheckRunSnapshot,
     HealthSnapshot,
+    MotorCheckRecord,
     MotorHealth,
     MotorHealthInfo,
 )
+from lib.motor_check import MotorCheckRunner
 from lib.sequence.engine import Sequence
 
 logger = logging.getLogger(__name__)
@@ -69,6 +72,9 @@ class RobotServer:
         temp_warning_c: float = 65.0,
         temp_critical_c: float = 80.0,
         tx_error_threshold: int = 96,
+        motor_check_per_motor_timeout_ms: float = 1500.0,
+        motor_check_default_magnitude: dict[str, float] | None = None,
+        motor_check_per_motor_overrides: dict[str, dict[str, float]] | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -89,6 +95,20 @@ class RobotServer:
         # 直近の HealthSnapshot をロボット名で保持し、_diff_health で前回と比較する
         self._last_health: dict[str, HealthSnapshot] = {}
 
+        # アクチュエータ動作確認 (Phase 6 段階⑨/⑩)。
+        # 設定値は段階⑩ で config/*.yaml から流し込まれる前提でキーワード引数化しておく。
+        self._motor_check_settings: dict[str, object] = {
+            "per_motor_timeout_ms": motor_check_per_motor_timeout_ms,
+            "default_magnitude": motor_check_default_magnitude,
+            "per_motor_overrides": motor_check_per_motor_overrides or {},
+        }
+        # ロボットごとの実行中ランナー (排他制御用)
+        self._motor_check_runners: dict[str, MotorCheckRunner] = {}
+        # 直近結果の保持。GET /robots/{robot}/motor_check/last はここを参照する
+        self._motor_check_last: dict[str, CheckRunSnapshot] = {}
+        # asyncio.create_task で起動した実行タスク。シャットダウン時にキャンセルする
+        self._motor_check_tasks: dict[str, asyncio.Task[None]] = {}
+
     def add_robot(self, name: str, sequence: Sequence, can_manager: CANManager) -> None:
         self._robots[name] = RobotContext(sequence=sequence, can_manager=can_manager)
 
@@ -99,6 +119,9 @@ class RobotServer:
         # 吸い込まれて 200 HTML になり、監視ツールが誤判定する。
         app.router.add_get("/health", self._health_handler)
         app.router.add_get("/ws", self._ws_handler)
+        # 動作確認エンドポイントも SPA フォールバックより前に登録する
+        app.router.add_post("/robots/{robot}/motor_check", self._motor_check_post)
+        app.router.add_get("/robots/{robot}/motor_check/last", self._motor_check_get_last)
 
         if _WEB_DIST_DIR.is_dir():
             app.router.add_static("/assets", _WEB_DIST_DIR / "assets")
@@ -213,6 +236,17 @@ class RobotServer:
             value = data.get("value")
             logger.info("set_param: motor=%s key=%s value=%s", motor_name, key, value)
 
+        elif cmd_type == "motor_check_start":
+            robot_name = data.get("robot")
+            # 知らないロボットは silent ignore (ws を切断しないため)
+            if robot_name and robot_name in self._robots:
+                await self._start_motor_check(robot_name)
+
+        elif cmd_type == "motor_check_abort":
+            robot_name = data.get("robot")
+            if robot_name and robot_name in self._motor_check_runners:
+                self._motor_check_runners[robot_name].abort()
+
         else:
             logger.debug("未知のコマンド: %s", cmd_type)
 
@@ -231,6 +265,178 @@ class RobotServer:
             except ConnectionResetError:
                 dead.add(ws)
         self._ws_clients -= dead
+
+    async def _broadcast_json(self, payload: dict) -> None:
+        """単一の JSON dict を全クライアントへ送信する共通ヘルパ。
+
+        既存 _broadcast_state / _broadcast_e_stop_state はそのまま残し、
+        本メソッドは動作確認イベント (motor_check_*) 専用に使う。
+        """
+        msg = json.dumps(payload, ensure_ascii=False)
+        dead: set[web.WebSocketResponse] = set()
+        for ws in self._ws_clients:
+            if ws.closed:
+                dead.add(ws)
+                continue
+            try:
+                await ws.send_str(msg)
+            except ConnectionResetError:
+                dead.add(ws)
+        self._ws_clients -= dead
+
+    # ------------------------------------------------------------------ #
+    #  アクチュエータ動作確認 (Phase 6 段階⑨ — タスク 6-22)
+    # ------------------------------------------------------------------ #
+
+    async def _start_motor_check(self, robot_name: str) -> bool:
+        """指定ロボットの動作確認を起動する。拒否時は False を返す。
+
+        拒否条件の優先順:
+          1. 緊急停止中 (誤発火による微小駆動を完全に止める)
+          2. 通常シーケンス実行中 (制御権の二重取得を防ぐ)
+          3. 既に動作確認実行中 (二重起動の防止)
+        """
+        if robot_name not in self._robots:
+            return False
+
+        if self._e_stop_active:
+            await self._broadcast_motor_check_error(
+                robot_name, "緊急停止中のため動作確認を実行できません"
+            )
+            return False
+
+        ctx = self._robots[robot_name]
+        if ctx.sequence._running:
+            await self._broadcast_motor_check_error(
+                robot_name, "通常シーケンス実行中のため動作確認を実行できません"
+            )
+            return False
+
+        existing = self._motor_check_runners.get(robot_name)
+        if existing is not None and existing.is_running:
+            await self._broadcast_motor_check_error(robot_name, "既に動作確認を実行中です")
+            return False
+
+        # MotorCheckRunner にはロボットに登録された全モータを渡す。順序は dict 挿入順
+        # = config の宣言順を保つため OrderedDict 的な扱いは Python 3.7+ で保証されている。
+        motors = ctx.can_manager._motors
+        runner = MotorCheckRunner(
+            robot_name=robot_name,
+            can_manager=ctx.can_manager,
+            motors=motors,
+            per_motor_timeout_ms=float(self._motor_check_settings["per_motor_timeout_ms"]),
+            default_magnitude=self._motor_check_settings["default_magnitude"],  # type: ignore[arg-type]
+            per_motor_overrides=self._motor_check_settings["per_motor_overrides"],  # type: ignore[arg-type]
+        )
+
+        # コールバックは runner の同期コンテキストから呼ばれる。WS 配信は async なので
+        # asyncio.create_task で fire-and-forget する。loop は run() 中なので必ず取れる。
+        # GC で task が消失しないよう _bg_tasks セットに保持する (RUF006 対策)。
+        loop = asyncio.get_event_loop()
+        bg_tasks: set[asyncio.Task[None]] = set()
+
+        def _spawn(coro) -> None:
+            t = loop.create_task(coro)
+            bg_tasks.add(t)
+            t.add_done_callback(bg_tasks.discard)
+
+        def _on_progress(name: str, idx: int, total: int) -> None:
+            _spawn(self._broadcast_motor_check_progress(robot_name, name, idx, total))
+
+        def _on_record(record: MotorCheckRecord) -> None:
+            _spawn(self._broadcast_motor_check_record(robot_name, record))
+
+        runner.set_on_progress(_on_progress)
+        runner.set_on_record(_on_record)
+
+        self._motor_check_runners[robot_name] = runner
+
+        async def _run() -> None:
+            try:
+                snapshot = await runner.run()
+                self._motor_check_last[robot_name] = snapshot
+                await self._broadcast_motor_check_done(robot_name, snapshot)
+            except Exception as exc:  # pragma: no cover - 防御的
+                logger.exception("動作確認エラー (%s): %s", robot_name, exc)
+                await self._broadcast_motor_check_error(robot_name, str(exc))
+            finally:
+                self._motor_check_tasks.pop(robot_name, None)
+                # runners からは敢えて消さない: GET /motor_check/last の補助情報として
+                # 直近 runner を参照したい場合に備える。次回 start で上書きされる。
+
+        task = asyncio.create_task(_run())
+        self._motor_check_tasks[robot_name] = task
+        return True
+
+    async def _broadcast_motor_check_progress(
+        self,
+        robot: str,
+        current: str,
+        index: int,
+        total: int,
+    ) -> None:
+        await self._broadcast_json(
+            {
+                "type": "motor_check_progress",
+                "robot": robot,
+                "current": current,
+                "index": index,
+                "total": total,
+            }
+        )
+
+    async def _broadcast_motor_check_record(self, robot: str, record: MotorCheckRecord) -> None:
+        await self._broadcast_json(
+            {
+                "type": "motor_check_record",
+                "robot": robot,
+                "record": record.to_dict(),
+            }
+        )
+
+    async def _broadcast_motor_check_done(self, robot: str, snapshot: CheckRunSnapshot) -> None:
+        await self._broadcast_json(
+            {
+                "type": "motor_check_done",
+                "robot": robot,
+                "snapshot": snapshot.to_dict(),
+            }
+        )
+
+    async def _broadcast_motor_check_error(self, robot: str, message: str) -> None:
+        await self._broadcast_json(
+            {
+                "type": "motor_check_error",
+                "robot": robot,
+                "message": message,
+            }
+        )
+
+    async def _motor_check_post(self, request: web.Request) -> web.Response:
+        """POST /robots/{robot}/motor_check: 動作確認の起動エンドポイント。
+
+        起動成功時は即時 200 を返し、結果は WS 経由で配信する。拒否時は 409 を返し
+        WS 側にもエラーイベントが流れる (両系統の購読側に通知)。
+        """
+        robot = request.match_info["robot"]
+        if robot not in self._robots:
+            return web.json_response({"error": "robot not found"}, status=404)
+
+        started = await self._start_motor_check(robot)
+        if not started:
+            return web.json_response({"started": False, "reason": "拒否"}, status=409)
+        return web.json_response({"started": True}, status=200)
+
+    async def _motor_check_get_last(self, request: web.Request) -> web.Response:
+        """GET /robots/{robot}/motor_check/last: 直近の動作確認スナップショット。"""
+        robot = request.match_info["robot"]
+        if robot not in self._robots:
+            return web.json_response({"error": "robot not found"}, status=404)
+
+        snapshot = self._motor_check_last.get(robot)
+        if snapshot is None:
+            return web.json_response({"snapshot": None}, status=200)
+        return web.json_response({"snapshot": snapshot.to_dict()}, status=200)
 
     async def _broadcast_loop(self) -> None:
         while True:

@@ -26,6 +26,7 @@ export function App() {
           connected: socket.connected,
           eStopActive: socket.eStopActive,
           healthEvents: socket.healthEvents,
+          motorChecks: socket.motorChecks,
           send: socket.send,
           onEStop,
           onEStopRelease,

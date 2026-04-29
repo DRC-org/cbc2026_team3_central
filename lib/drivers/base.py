@@ -75,3 +75,41 @@ class MotorDriver(abc.ABC):
     def is_fault(self) -> bool:
         """ハード障害フラグ。デフォルトは False (各サブクラスで上書き)。"""
         return False
+
+    # ------------------------------------------------------------------ #
+    #  アクチュエータ動作確認 (Phase 6 段階⑦)
+    # ------------------------------------------------------------------ #
+    # MotorCheckRunner からの能動テスト用 API
+    # 抽象メソッドにすると既存のテスト用 mock や派生クラスを破壊するため、
+    # デフォルトは NotImplementedError raise としてサブクラスで個別に実装する
+
+    def check_command(self, *, magnitude: float) -> tuple[can.Message, dict]:
+        """動作確認用の指令メッセージとコンテキストを返す。
+
+        戻り値:
+            (msg, context)
+            context は evaluate_check_result で参照する辞書で、
+            最低限 {"target": float} を含む。
+        """
+        raise NotImplementedError(f"{type(self).__name__} は check_command を実装していません")
+
+    def evaluate_check_result(
+        self,
+        state: MotorState,
+        context: dict,
+        *,
+        tolerance: float | None = None,
+    ) -> tuple[bool, str | None]:
+        """フィードバック state が check_command の指令に追従したか判定する。
+
+        戻り値:
+            (passed, detail)
+            detail は失敗時の人間向け説明。成功時は基本 None。
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} は evaluate_check_result を実装していません"
+        )
+
+    def reset_after_check(self) -> can.Message:
+        """動作確認後に元の安全状態に戻す指令メッセージを返す。"""
+        raise NotImplementedError(f"{type(self).__name__} は reset_after_check を実装していません")
