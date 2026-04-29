@@ -53,3 +53,25 @@ class MotorDriver(abc.ABC):
     @abc.abstractmethod
     def matches_feedback(self, msg: can.Message) -> bool:
         """受信した CAN メッセージがこのモータのフィードバックかどうか判定する。"""
+
+    # ------------------------------------------------------------------ #
+    #  ヘルスチェック判定 (Phase 6)
+    # ------------------------------------------------------------------ #
+    # しきい値は config/*.yaml の health セクション由来 (デフォルト: warning=65, critical=80)
+    # サブクラスは過電流フラグや fault フラグを持つ場合のみオーバーライドする
+
+    def has_thermal_warning(self, temp_warning_c: float, temp_critical_c: float) -> bool:
+        """温度警告判定。基底実装は MotorState.temperature と warning しきい値の比較。"""
+        return self._state.temperature >= temp_warning_c
+
+    def has_thermal_fault(self, temp_critical_c: float) -> bool:
+        """温度異常 (FAULT) 判定。基底実装は MotorState.temperature と critical しきい値の比較。"""
+        return self._state.temperature >= temp_critical_c
+
+    def has_overcurrent_warning(self) -> bool:
+        """過電流警告判定。デフォルトは判定材料がないので False (各サブクラスで上書き)。"""
+        return False
+
+    def is_fault(self) -> bool:
+        """ハード障害フラグ。デフォルトは False (各サブクラスで上書き)。"""
+        return False

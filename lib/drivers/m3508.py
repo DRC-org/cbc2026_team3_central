@@ -12,6 +12,11 @@ _TX_ARBITRATION_ID = 0x200
 _FEEDBACK_BASE_ID = 0x200
 _ANGLE_MAX = 8191
 
+# C620 ESC は明示的な過電流フラグを持たないため、フィードバック電流の絶対値で異常検出する
+# しきい値 18000 は連続定格 (約 ±10000 mA) を大きく超え、かつ素子飽和 (16384) より上の値を選定
+# 後続フェーズで config 化するが段階② では定数で実装する
+_OVERCURRENT_THRESHOLD_MA = 18000
+
 
 def _clamp(value: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, value))
@@ -52,6 +57,9 @@ class M3508Driver(MotorDriver):
 
     def matches_feedback(self, msg: can.Message) -> bool:
         return msg.arbitration_id == _FEEDBACK_BASE_ID + self.can_id
+
+    def has_overcurrent_warning(self) -> bool:
+        return abs(self._state.current) > _OVERCURRENT_THRESHOLD_MA
 
     @staticmethod
     def encode_current_frame(currents: list[int]) -> can.Message:

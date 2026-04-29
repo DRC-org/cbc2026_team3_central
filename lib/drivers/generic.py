@@ -27,6 +27,10 @@ class GenericDriver(MotorDriver):
 
     def __init__(self, name: str, can_id: int) -> None:
         super().__init__(name, can_id)
+        # フィードバック Byte7 の bit1/bit2 は MotorState に持たせず、ドライバ側で保持する
+        # (MotorState は frozen dataclass で他ドライバ共通のため、汎用化を避けて専用属性に分離)
+        self._overcurrent_flag: bool = False
+        self._overheat_flag: bool = False
 
     # ---- CAN ID ユーティリティ ----
 
@@ -86,6 +90,24 @@ class GenericDriver(MotorDriver):
             reached=bool(flags & 0x01),
         )
 
+    def update_state(self, msg: can.Message) -> MotorState:
+        # decode_feedback は純粋関数のまま保ち、副作用 (フラグ保持) はここで処理する
+        # bit0 (到達) は MotorState.reached に反映、bit1=過電流 / bit2=過熱 はドライバ属性に保持
+        flags = msg.data[7]
+        self._overcurrent_flag = bool(flags & 0x02)
+        self._overheat_flag = bool(flags & 0x04)
+        return super().update_state(msg)
+
     def matches_feedback(self, msg: can.Message) -> bool:
         cmd, dev = self.parse_can_id(msg.arbitration_id)
         return cmd == CommandType.FEEDBACK and dev == self.can_id
+
+    # ------------------------------------------------------------------ #
+    #  ヘルスチェック判定
+    # ------------------------------------------------------------------ #
+    def has_overcurrent_warning(self) -> bool:
+        return self._overcurrent_flag
+
+    def is_fault(self) -> bool:
+        # 過熱は復帰不能リスクが高いので FAULT 扱い (シーケンス停止対象)
+        return self._overheat_flag

@@ -555,6 +555,146 @@ health:
 | 送信エラーで `_receive_loop` が落ちる | `send_to_bus` の例外を握って health に反映、ループは継続 |
 | bus_off からの自動復帰 | `bus.recover()` を試行回数制限付きで呼び、ログに残す |
 
+#### アクチュエータ動作確認シーケンス
+
+受動監視（H1〜H4）を補完する **能動テスト**。Web UI の「動作確認」ボタンから起動し、各モータを 1 つずつ微小駆動して指令への応答を視覚的に確認する。
+
+##### コンセプト
+
+- 受動監視 = 「いま壊れていないか？」、能動テスト = 「いま指示を出したら正しく動くか？」を別物として扱う
+- 通常シーケンス（main_hand / sub_hand）と **同じエンジンを使い回さない**。`MotorCheckRunner` が独立して 1 モータずつ駆動・元の状態に戻す
+- 緊急停止中・通常シーケンス実行中・バス DOWN 時はボタンを無効化（誤操作防止）
+
+##### モータごとの判定ロジック
+
+| ドライバ | 投入指令 | 判定基準 |
+|---|---|---|
+| **M3508** (電流制御) | 目標電流 ±500 mA を 1s 印加 | 1s 以内にフィードバック受信 + `velocity` の符号が指令電流と一致 |
+| **EDULITE 05** (位置制御) | 現在位置 ±5° を 1s 指令 | 1s 以内にフィードバック受信 + `position` が目標±許容に到達 |
+| **Generic** (位置/速度制御) | `control_type` に応じた微小目標 | フィードバック受信 + `reached` フラグ立ち上がり、過電流/過熱フラグなし |
+
+判定ロジックを呼び出し側に漏らさないよう、`MotorDriver` 基底クラスに `check_command(*, magnitude)` / `evaluate_check_result(state, target)` を定義し各ドライバが自身の動作確認パラメータを保持。
+
+##### データ構造（`lib/health.py` に追加）
+
+```python
+class MotorCheckResult(Enum):
+    PENDING / RUNNING / PASSED / FAILED / TIMEOUT / SKIPPED
+
+@dataclass MotorCheckRecord:
+    motor, bus, started_at, finished_at, result,
+    expected, observed, detail
+
+@dataclass CheckRunSnapshot:
+    robot, started_at, finished_at,
+    overall,  # "running" | "ok" | "partial" | "failed"
+    records: list[MotorCheckRecord]
+```
+
+##### WebSocket / HTTP プロトコル
+
+Client → Server:
+```jsonc
+{ "type": "motor_check_start", "robot": "main_hand" }
+{ "type": "motor_check_abort", "robot": "main_hand" }
+```
+
+Server → Client（実行中ストリーム）:
+```jsonc
+{ "type": "motor_check_progress", "robot": "main_hand",
+  "current": "arm_joint", "index": 1, "total": 4 }
+
+{ "type": "motor_check_record", "robot": "main_hand",
+  "record": { "motor": "lift_motor", "result": "passed",
+              "expected": 500, "observed": 487.2, "detail": null } }
+
+{ "type": "motor_check_done", "robot": "main_hand",
+  "snapshot": { ...CheckRunSnapshot... } }
+```
+
+HTTP:
+- `POST /robots/{robot}/motor_check` → 起動。即時 `{ "started": true }` を返し、結果は WS で配信
+- `GET /robots/{robot}/motor_check/last` → 直近結果のスナップショット
+
+##### 実行フロー
+
+```
+RobotServer.handle("motor_check_start")
+  └─ MotorCheckRunner(robot, can_manager, motors).run()
+       1) 緊急停止 / 通常シーケンス実行中なら拒否
+       2) ロックを取り、CheckRunSnapshot を初期化
+       3) for motor in motors:
+            - record.result = RUNNING / WS push (motor_check_progress)
+            - msg = motor.check_command()
+            - last_rx_at の現在値を記録
+            - send + 観測待ち（タイムアウト T 秒）
+            - motor.evaluate_check_result(state, target) → PASSED/FAILED
+            - 元の位置 / 0 電流に戻す指令を必ず送る
+            - WS push (motor_check_record)
+       4) overall = all/some/none passed
+       5) WS push (motor_check_done) / lock release
+```
+
+##### 安全策
+
+- 動作確認シーケンス開始前に **確認ダイアログ必須**（「全モータを順番に微小駆動します。周囲の安全を確認してください」）
+- 各モータの指令量は **物理的に安全な微小量に固定**（config で上書き可能）
+- 動作確認実行中も **緊急停止コマンドは即時優先**（既存 e_stop 経路）
+- M3508 の電流指令はリリース時に必ず 0 を再送（駆動状態を残さない）
+
+##### config（既定値）
+
+```yaml
+motor_check:
+  per_motor_timeout_ms: 1500     # 1 モータあたりのタイムアウト
+  default_magnitude:
+    m3508: 500                   # mA
+    edulite05: 5.0               # deg
+    generic: 0.1                 # 0.1 rev / 10% duty 等（control_type 依存）
+  tolerance:
+    edulite05_deg: 1.0
+```
+
+config の `motors` 内で個別上書き:
+```yaml
+motors:
+  lift_motor:
+    driver: m3508
+    bus: m3508_bus
+    can_id: 1
+    motor_check:
+      magnitude: 800             # この個体のみ 800mA で確認
+      timeout_ms: 2000
+```
+
+##### 実装タスク
+
+| # | ファイル | 内容 |
+|---|---|---|
+| 6-15 | `tests/test_motor_check.py` | **テスト先行**: モック CAN で PASSED/FAILED/TIMEOUT、abort、競合（通常シーケンス中 / 緊急停止中の拒否）|
+| 6-16 | `lib/drivers/base.py` (修正) | `check_command(*, magnitude)` / `evaluate_check_result(state, target)` 抽象メソッド + デフォルト実装 |
+| 6-17 | `lib/drivers/m3508.py` (修正) | 電流指令版の check 実装 |
+| 6-18 | `lib/drivers/edulite05.py` (修正) | 位置指令版の check 実装 |
+| 6-19 | `lib/drivers/generic.py` (修正) | `control_type` に応じた check 実装 |
+| 6-20 | `lib/motor_check.py` (新規) | `MotorCheckRunner`, `CheckRunSnapshot`, `MotorCheckRecord` |
+| 6-21 | `tests/test_server_motor_check.py` | **テスト先行**: WS の `motor_check_start` / `_progress` / `_record` / `_done` の流れ、緊急停止中・シーケンス中の拒否 |
+| 6-22 | `lib/server.py` (修正) | コマンドハンドラ追加（`motor_check_start` / `_abort`）+ HTTP ルート + WS イベント発火 |
+| 6-23 | `config/*.yaml` (修正) | `motor_check:` セクション + モータ単位の上書き |
+| 6-24 | `web/src/hooks/useMotorCheck.ts` | WS イベント集約 hook |
+| 6-25 | `web/src/components/MotorCheckButton.tsx` | ヘッダボタン + 確認ダイアログ。緊急停止中 / シーケンス中 / バス DOWN で無効化 |
+| 6-26 | `web/src/components/MotorCheckPanel.tsx` | 実行中の進捗 + モータごとの ✓×、終了後はサマリ + リトライ |
+| 6-27 | `web/src/pages/Dashboard.tsx` (修正) | パネル組み込み |
+
+##### 段階追加
+
+| 段階 | 成果物 | 動作確認 |
+|---|---|---|
+| ⑦ ドライバ check API | 6-15〜6-19 | 各ドライバ単体テスト（PASSED/FAILED/TIMEOUT） |
+| ⑧ MotorCheckRunner | 6-20 | モック CAN で全シナリオ再現 + abort 動作確認 |
+| ⑨ サーバー統合 | 6-21, 6-22 | WS で `_start` → 進捗 → 完了の一連を確認、競合拒否 |
+| ⑩ config 反映 | 6-23 | dry-run でモータ別パラメータが効くか |
+| ⑪ Web UI | 6-24〜6-27 | dry-run + Web UI から実押下・結果表示・無効化ロジックの目視確認 |
+
 ---
 
 ## RobStride EDULITE 05 プロトコル概要

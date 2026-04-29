@@ -140,3 +140,64 @@ class TestEncodeSetMode:
 
         msg = self.drv.encode_set_mode(ControlMode.DUTY)
         assert msg.data[0] == 2
+
+
+class TestHealth:
+    """ヘルスチェック判定 (Phase 6 段階②)。"""
+
+    def setup_method(self):
+        self.drv = GenericDriver("test_motor", 0x01)
+
+    def _feed(self, *, temp: int = 25, flags: int = 0x00) -> None:
+        data = bytearray(8)
+        struct.pack_into("<h", data, 0, 0)
+        struct.pack_into("<h", data, 2, 0)
+        struct.pack_into("<h", data, 4, 0)
+        data[6] = temp
+        data[7] = flags
+        msg = can.Message(arbitration_id=0x101, data=bytes(data), is_extended_id=False)
+        self.drv.update_state(msg)
+
+    def test_initial_flags_are_clear(self):
+        # 初期化直後はどのフラグも立っていない
+        assert self.drv.has_overcurrent_warning() is False
+        assert self.drv.is_fault() is False
+
+    def test_thermal_warning_via_temperature_byte(self):
+        self._feed(temp=70, flags=0x00)
+        assert self.drv.has_thermal_warning(temp_warning_c=65.0, temp_critical_c=80.0) is True
+
+    def test_overcurrent_flag_bit1(self):
+        # bit1 = 過電流警告
+        self._feed(flags=0b00000010)
+        assert self.drv.has_overcurrent_warning() is True
+        assert self.drv.is_fault() is False
+
+    def test_overheat_flag_bit2_is_fault(self):
+        # bit2 = 過熱 (FAULT 扱い)
+        self._feed(flags=0b00000100)
+        assert self.drv.is_fault() is True
+        assert self.drv.has_overcurrent_warning() is False
+
+    def test_combined_flags_reached_overcurrent_overheat(self):
+        # bit0 (到達) + bit1 (過電流) + bit2 (過熱) 同時セット
+        self._feed(flags=0b00000111)
+        assert self.drv.state.reached is True
+        assert self.drv.has_overcurrent_warning() is True
+        assert self.drv.is_fault() is True
+
+    def test_flags_clear_on_recovery(self):
+        # 一度立ったフラグが新しいフレームで降りることを確認 (復帰挙動)
+        self._feed(flags=0b00000110)
+        assert self.drv.has_overcurrent_warning() is True
+        assert self.drv.is_fault() is True
+
+        self._feed(flags=0b00000000)
+        assert self.drv.has_overcurrent_warning() is False
+        assert self.drv.is_fault() is False
+
+    def test_unrelated_high_bits_ignored(self):
+        # bit3 以上はヘルス判定では無視されること
+        self._feed(flags=0b11111000)
+        assert self.drv.has_overcurrent_warning() is False
+        assert self.drv.is_fault() is False

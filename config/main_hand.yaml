@@ -5,6 +5,13 @@ can_buses:
   edulite_bus: can1
   generic_bus: can2
 
+health:
+  feedback_timeout_ms: 500   # この時間フィードバックなければ STALE
+  temp_warning_c: 65         # この温度で WARNING
+  temp_critical_c: 80        # この温度で FAULT
+  tx_error_threshold: 96     # CAN error_passive 境界
+  # bus_check_interval_ms は将来の独立ヘルスチェックループ用 (現状未使用)
+
 motors:
   # DJI M3508 (C620 ESC) — CAN Standard Frame
   # lift_motor:

@@ -114,3 +114,50 @@ class TestEncodeCurrentFrame:
         values = struct.unpack(">hhhh", msg.data)
         assert values[0] == 16384
         assert values[1] == -16384
+
+
+class TestHealth:
+    """ヘルスチェック判定 (Phase 6 段階②)。"""
+
+    def setup_method(self) -> None:
+        self.driver = M3508Driver("test_motor", can_id=1)
+
+    def _feed(self, *, current: int = 0, temp: int = 25) -> None:
+        # フィードバックフレームを 1 つ流して内部 state を更新する補助
+        data = struct.pack(">hhhBB", 0, 0, current, temp, 0)
+        msg = can.Message(arbitration_id=0x201, data=data, is_extended_id=False)
+        self.driver.update_state(msg)
+
+    def test_thermal_warning_below_threshold(self) -> None:
+        self._feed(temp=60)
+        assert self.driver.has_thermal_warning(temp_warning_c=65, temp_critical_c=80) is False
+
+    def test_thermal_warning_at_threshold(self) -> None:
+        self._feed(temp=65)
+        assert self.driver.has_thermal_warning(temp_warning_c=65, temp_critical_c=80) is True
+
+    def test_thermal_fault_at_critical(self) -> None:
+        self._feed(temp=80)
+        assert self.driver.has_thermal_fault(temp_critical_c=80) is True
+        # critical 未満なら fault ではない
+        self._feed(temp=79)
+        assert self.driver.has_thermal_fault(temp_critical_c=80) is False
+
+    def test_overcurrent_warning_above_threshold(self) -> None:
+        # しきい値 18000 mA を超える電流で警告
+        self._feed(current=18500)
+        assert self.driver.has_overcurrent_warning() is True
+
+    def test_overcurrent_warning_negative_above_threshold(self) -> None:
+        # 逆方向の電流暴走も検出 (絶対値判定)
+        self._feed(current=-19000)
+        assert self.driver.has_overcurrent_warning() is True
+
+    def test_overcurrent_warning_within_limit(self) -> None:
+        self._feed(current=15000)
+        assert self.driver.has_overcurrent_warning() is False
+
+    def test_is_fault_default_false(self) -> None:
+        # M3508 には明示的な fault フラグがないので常に False
+        self._feed(temp=200, current=20000)
+        assert self.driver.is_fault() is False

@@ -1,22 +1,134 @@
 import { Skeleton } from "@heroui/react";
-import { Bot } from "lucide-react";
+import { AlertTriangle, Bot, X, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { HealthIndicator } from "../components/HealthIndicator";
 import { Icon } from "../components/Icon";
 import { MotorSummary } from "../components/MotorSummary";
 import { SequenceProgress } from "../components/SequenceProgress";
 import { useRobot } from "../context/RobotContext";
+import type { BusHealthState, HealthChangeEvent, HealthSnapshot } from "../hooks/useRobotSocket";
 
 const ROBOTS = [
   { key: "main_hand", label: "メインハンド", path: "/main-hand" },
   { key: "sub_hand", label: "サブハンド", path: "/sub-hand" },
 ] as const;
 
+const STATE_RANK: Record<BusHealthState, number> = { ok: 0, degraded: 1, down: 2 };
+
+// 両ロボットの中で最も悪い overall を全体ヘッダ表示に使う
+function worstOverall(snapshots: (HealthSnapshot | undefined)[]): BusHealthState | undefined {
+  let worst: BusHealthState | undefined;
+  for (const snap of snapshots) {
+    if (!snap) continue;
+    if (worst === undefined || STATE_RANK[snap.overall] > STATE_RANK[worst]) {
+      worst = snap.overall;
+    }
+  }
+  return worst;
+}
+
+const TOAST_VISIBLE_MS = 5000;
+
+interface ToastState {
+  event: HealthChangeEvent;
+  // 同一イベントの再描画判定に使うため receivedAt を id 兼用にする
+  id: number;
+}
+
+function HealthToast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
+  const isCritical = toast.event.level === "critical";
+  const tone = isCritical
+    ? {
+        bg: "bg-red-50",
+        text: "text-red-700",
+        ring: "ring-red-500/40",
+        icon: XCircle,
+      }
+    : {
+        bg: "bg-amber-50",
+        text: "text-amber-700",
+        ring: "ring-amber-500/40",
+        icon: AlertTriangle,
+      };
+
+  return (
+    <div
+      role="alert"
+      className={`pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-[var(--radius-card)] p-4 shadow-[var(--shadow-elev)] ring-1 ${tone.bg} ${tone.text} ${tone.ring}`}
+    >
+      <Icon icon={tone.icon} size={20} strokeWidth={2.5} className="mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-xs font-bold tracking-wider uppercase">
+          <span>{toast.event.level}</span>
+          <span className="opacity-60">·</span>
+          <span className="font-mono normal-case opacity-80">{toast.event.robot}</span>
+        </div>
+        <div className="mt-1 truncate font-mono text-xs opacity-80">{toast.event.target}</div>
+        <div className="mt-1 text-sm font-semibold">
+          {toast.event.from} → {toast.event.to}
+        </div>
+        {toast.event.message ? (
+          <div className="mt-1 truncate text-xs opacity-80">{toast.event.message}</div>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        aria-label="通知を閉じる"
+        onClick={onDismiss}
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-black/5 ${tone.text}`}
+      >
+        <Icon icon={X} size={14} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
 export function Dashboard() {
-  const { states } = useRobot();
+  const { states, healthEvents } = useRobot();
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  const overall = useMemo(
+    () => worstOverall(ROBOTS.map(({ key }) => states[key]?.health)),
+    [states],
+  );
+
+  // info レベルは UI ノイズになるので警告以上のみ表示。直近 1 件を 5 秒間
+  useEffect(() => {
+    const latest = healthEvents[0];
+    if (!latest) return;
+    if (latest.level === "info") return;
+    setToast({ event: latest, id: latest.receivedAt });
+    const timer = setTimeout(() => {
+      setToast((prev) => (prev && prev.id === latest.receivedAt ? null : prev));
+    }, TOAST_VISIBLE_MS);
+    return () => clearTimeout(timer);
+  }, [healthEvents]);
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-10">
+      <div className="mb-5 flex items-center justify-between gap-3 md:mb-6">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
+            CAN ヘルス
+          </span>
+          <HealthIndicator
+            variant="pill"
+            health={
+              overall
+                ? {
+                    timestamp: 0,
+                    overall,
+                    buses: [],
+                    motors: [],
+                  }
+                : undefined
+            }
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
         {ROBOTS.map(({ key, label, path }) => {
           const state = states[key];
@@ -57,6 +169,7 @@ export function Dashboard() {
                     waitingTrigger={state.waiting_trigger}
                     large
                   />
+                  <HealthIndicator variant="card" health={state.health} />
                   <MotorSummary motors={state.motors} />
                 </>
               ) : (
@@ -70,6 +183,10 @@ export function Dashboard() {
             </article>
           );
         })}
+      </div>
+
+      <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2 md:right-6 md:bottom-6">
+        {toast ? <HealthToast toast={toast} onDismiss={() => setToast(null)} /> : null}
       </div>
     </main>
   );

@@ -122,3 +122,13 @@ class Edulite05Driver(MotorDriver):
         # data_area2 の Bit7~0 (= Bit15~8 of 29bit ID) がモータ ID
         motor_id = data_area2 & 0xFF
         return motor_id == self.can_id
+
+    # ------------------------------------------------------------------ #
+    #  ヘルスチェック判定
+    # ------------------------------------------------------------------ #
+    # TORQUE_MAX=12.0 N·m 直近を「過電流相当の警告」として扱う
+    # ステータスフラグ (29bit ID 内の故障コード) は段階③以降で解釈する
+    _OVERCURRENT_TORQUE_THRESHOLD = 11.0
+
+    def has_overcurrent_warning(self) -> bool:
+        return abs(self._state.current) >= self._OVERCURRENT_TORQUE_THRESHOLD

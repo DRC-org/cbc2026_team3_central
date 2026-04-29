@@ -165,3 +165,46 @@ class TestMatchesFeedback:
         arb_id = Edulite05Driver.build_can_id(0x01, 0x0000, 0x05)
         msg = can.Message(arbitration_id=arb_id, data=bytes(8), is_extended_id=True)
         assert drv.matches_feedback(msg) is False
+
+
+class TestHealth:
+    """ヘルスチェック判定 (Phase 6 段階②)。"""
+
+    def _feed(self, drv: Edulite05Driver, *, torque: float = 0.0, temp_c: float = 25.0) -> None:
+        # フィードバックフレームを 1 つ流して内部 state を更新する補助
+        pos_raw = Edulite05Driver.float_to_uint16(0.0, -4 * math.pi, 4 * math.pi)
+        vel_raw = Edulite05Driver.float_to_uint16(0.0, -30.0, 30.0)
+        torque_raw = Edulite05Driver.float_to_uint16(torque, -12.0, 12.0)
+        temp_raw = int(temp_c * 10)
+        data = struct.pack(">HHHH", pos_raw, vel_raw, torque_raw, temp_raw)
+        data_area2 = (2 << 14) | (0 << 8) | drv.can_id
+        arb_id = Edulite05Driver.build_can_id(0x02, data_area2, 0x00)
+        msg = can.Message(arbitration_id=arb_id, data=data, is_extended_id=True)
+        drv.update_state(msg)
+
+    def test_thermal_warning_at_threshold(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        self._feed(drv, temp_c=65.0)
+        assert drv.has_thermal_warning(temp_warning_c=65.0, temp_critical_c=80.0) is True
+
+    def test_thermal_fault_below_critical(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        self._feed(drv, temp_c=70.0)
+        assert drv.has_thermal_fault(temp_critical_c=80.0) is False
+
+    def test_overcurrent_warning_at_torque_limit(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        # TORQUE_MAX=12.0 に対して 11.0 で警告
+        self._feed(drv, torque=11.5)
+        assert drv.has_overcurrent_warning() is True
+
+    def test_overcurrent_warning_below_threshold(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        self._feed(drv, torque=10.0)
+        assert drv.has_overcurrent_warning() is False
+
+    def test_is_fault_default_false(self):
+        drv = Edulite05Driver("m1", can_id=0x05)
+        # 現状ステータスフラグを解釈していないため常に False
+        self._feed(drv, torque=11.9, temp_c=90.0)
+        assert drv.is_fault() is False

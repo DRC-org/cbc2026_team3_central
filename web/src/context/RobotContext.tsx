@@ -1,12 +1,13 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
-import type { RobotState } from "../hooks/useRobotSocket";
+import type { HealthChangeEvent, RobotState } from "../hooks/useRobotSocket";
 
 interface RobotContextValue {
   states: Record<string, RobotState>;
   connected: boolean;
   eStopActive: boolean;
+  healthEvents: HealthChangeEvent[];
   send: (data: object) => void;
   onEStop: () => void;
   onEStopRelease: () => void;
