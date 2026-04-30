@@ -292,10 +292,16 @@ cbc2026_team3_central/
   "step_index": 1,
   "total_steps": 5,
   "waiting_trigger": true,
+  "steps": [
+    { "index": 0, "label": "初期位置へ移動", "require_trigger": false },
+    { "index": 1, "label": "ワーク前まで前進", "require_trigger": true }
+  ],
   "motors": {
     "m3508_1": { "pos": 1500, "vel": 0.0, "torque": 0.2, "temp": 35.0 },
     "edulite_1": { "pos": 0.5, "vel": 0.0, "torque": 0.1, "temp": 28.0 }
-  }
+  },
+  "e_stop_active": false,
+  "health": { /* HealthSnapshot */ }
 }
 ```
 
@@ -303,9 +309,28 @@ cbc2026_team3_central/
 
 ```jsonc
 { "type": "trigger", "robot": "main_hand" }
+{ "type": "sequence_jump", "robot": "main_hand", "step_index": 3 }
+{ "type": "sequence_stop", "robot": "main_hand" }
+{ "type": "sequence_start", "robot": "main_hand" }
 { "type": "e_stop" }
+{ "type": "e_stop_release" }
 { "type": "set_param", "motor": "m3508_1", "key": "kp", "value": 1.5 }
 ```
+
+### シーケンス制御コマンドのセマンティクス
+
+- **trigger**: `require_trigger=true` のステップを次に進める
+- **sequence_jump**: 任意のステップへジャンプ。実行中なら次のステップ境界で反映、停止中・完走後なら指定 index から再開
+- **sequence_stop**: 通常停止 (緊急停止と異なり CAN 層には介入しない)。停止後 `step_index=0` に戻り `running=false` になる
+- **sequence_start**: 先頭から実行開始 (停止後・完走後の再起動)
+
+### dry-run モード
+
+`uv run python main.py --dry-run` 起動時、`RobotServer` は以下の変更を加えて Web UI を完全デモ可能にする:
+
+- 各モータの状態は `time.time()` ベースのサイン波で擬似生成（pos/vel/torque/temp）
+- ヘルススナップショットは全モータ・全バスを `ok` に上書き（virtual バスではフィードバックが返らないため）
+- シーケンスは `_on_startup` で自動的に `_run_sequence_loop` タスクとして起動され、`require_trigger` ステップで待機する
 
 ---
 

@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import math
 import pathlib
 import time
 from dataclasses import dataclass
@@ -75,6 +76,7 @@ class RobotServer:
         motor_check_per_motor_timeout_ms: float = 1500.0,
         motor_check_default_magnitude: dict[str, float] | None = None,
         motor_check_per_motor_overrides: dict[str, dict[str, float]] | None = None,
+        dry_run: bool = False,
     ) -> None:
         self._host = host
         self._port = port
@@ -84,6 +86,10 @@ class RobotServer:
         self._broadcast_interval: float = 0.05
         self._broadcast_task: asyncio.Task[None] | None = None
         self._e_stop_active: bool = False
+        # dry-run 時はシーケンスを自動進行させ、モータ状態を擬似的に揺らがせて
+        # Web UI のデモを成立させる。実機運用時は False のまま影響しない。
+        self._dry_run: bool = dry_run
+        self._sequence_tasks: dict[str, asyncio.Task[None]] = {}
 
         # ヘルスチェックしきい値は config/*.yaml の health セクション由来 (Phase 6 段階⑤で反映)
         self._health_thresholds: dict[str, float | int] = {
@@ -168,6 +174,12 @@ class RobotServer:
 
     async def _on_startup(self, app: web.Application) -> None:
         self._broadcast_task = asyncio.create_task(self._broadcast_loop())
+        # 各ロボットのシーケンス実行ループを起動。停止/ジャンプで再起動可能な
+        # 永続タスクとして保持し、shutdown でキャンセルする。
+        for robot_name in self._robots:
+            self._sequence_tasks[robot_name] = asyncio.create_task(
+                self._run_sequence_loop(robot_name)
+            )
 
     async def _on_shutdown(self, app: web.Application) -> None:
         if self._broadcast_task is not None:
@@ -175,9 +187,36 @@ class RobotServer:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._broadcast_task
 
+        for task in self._sequence_tasks.values():
+            task.cancel()
+        for task in self._sequence_tasks.values():
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        self._sequence_tasks.clear()
+
         for ws in set(self._ws_clients):
             await ws.close()
         self._ws_clients.clear()
+
+    async def _run_sequence_loop(self, robot_name: str) -> None:
+        """シーケンスを永続的に走らせる。停止/完走後は resume 要求を待つ。"""
+        seq = self._robots[robot_name].sequence
+        # 起動時は即実行 (操縦者は接続直後から進行を観察できる)
+        seq._resume_event.set()
+        while True:
+            await seq._resume_event.wait()
+            seq._resume_event.clear()
+            try:
+                await seq.run()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("シーケンス実行中にエラー: %s", robot_name)
+            # 通常停止された場合はステップを 0 に戻して次の起動を待つ。
+            # 完走 (current_index == total) はそのまま位置を保持する。
+            if seq._stop_event.is_set():
+                seq._current_index = 0
+                seq._stop_event.clear()
 
     async def _ws_handler(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse()
@@ -235,6 +274,29 @@ class RobotServer:
             key = data.get("key")
             value = data.get("value")
             logger.info("set_param: motor=%s key=%s value=%s", motor_name, key, value)
+
+        elif cmd_type == "sequence_jump":
+            robot_name = data.get("robot")
+            step_index = data.get("step_index")
+            if (
+                robot_name
+                and robot_name in self._robots
+                and isinstance(step_index, int)
+            ):
+                self._robots[robot_name].sequence.request_jump(step_index)
+                logger.info("sequence_jump: %s -> %d", robot_name, step_index)
+
+        elif cmd_type == "sequence_stop":
+            robot_name = data.get("robot")
+            if robot_name and robot_name in self._robots:
+                self._robots[robot_name].sequence.request_stop()
+                logger.info("sequence_stop: %s", robot_name)
+
+        elif cmd_type == "sequence_start":
+            robot_name = data.get("robot")
+            if robot_name and robot_name in self._robots:
+                self._robots[robot_name].sequence.request_start()
+                logger.info("sequence_start: %s", robot_name)
 
         elif cmd_type == "motor_check_start":
             robot_name = data.get("robot")
@@ -580,18 +642,26 @@ class RobotServer:
 
         motors: dict[str, dict] = {}
         for motor_name, motor in ctx.can_manager._motors.items():
-            s = motor.state
-            motors[motor_name] = {
-                "pos": s.position,
-                "vel": s.velocity,
-                "torque": s.current,
-                "temp": s.temperature,
-            }
+            if self._dry_run:
+                # dry-run: 実機フィードバックがないので、UI デモ向けに擬似値を生成
+                motors[motor_name] = self._dry_run_motor_state(robot_name, motor_name)
+            else:
+                s = motor.state
+                motors[motor_name] = {
+                    "pos": s.position,
+                    "vel": s.velocity,
+                    "torque": s.current,
+                    "temp": s.temperature,
+                }
 
         # snapshot が未指定 (テストや単独呼び出し) の場合はその場で計算する。
         # _broadcast_state からの呼び出しは事前計算済みのものを使い回して二重計算を避ける。
         if snapshot is None:
             snapshot = self._compute_health(robot_name)
+
+        snapshot_dict = snapshot.to_dict()
+        if self._dry_run:
+            snapshot_dict = self._dry_run_patch_health(snapshot_dict)
 
         return {
             "type": "state",
@@ -601,10 +671,42 @@ class RobotServer:
             "step_index": progress["step_index"],
             "total_steps": progress["total_steps"],
             "waiting_trigger": progress["waiting_trigger"],
+            "steps": progress.get("steps", []),
             "motors": motors,
             "e_stop_active": self._e_stop_active,
-            "health": snapshot.to_dict(),
+            "health": snapshot_dict,
         }
+
+    def _dry_run_motor_state(self, robot_name: str, motor_name: str) -> dict:
+        """dry-run で UI に意味のある動きを見せるための擬似モータ状態。
+
+        ロボット名・モータ名の文字列ハッシュをオフセットに使い、各モータが
+        異なる位相で揺らぐようにしている。実値ではなく見栄え重視。
+        """
+        h = sum(ord(c) for c in robot_name + ":" + motor_name)
+        t = time.time()
+        return {
+            "pos": math.sin(t * 0.6 + h * 0.3) * 1500.0,
+            "vel": math.cos(t * 0.9 + h * 0.5) * 80.0,
+            "torque": math.sin(t * 0.7 + h * 0.2) * 0.35,
+            "temp": 30.0 + math.sin(t * 0.15 + h * 0.7) * 6.0,
+        }
+
+    def _dry_run_patch_health(self, snapshot_dict: dict) -> dict:
+        """dry-run 時にヘルススナップショットを「全体 OK」相当に整える。
+
+        virtual バスはフィードバックを返さないため通常モータが STALE になるが、
+        UI デモ目的で OK 表示にする。実機モードでは呼ばれない。
+        """
+        snapshot_dict["overall"] = "ok"
+        for motor in snapshot_dict.get("motors", []):
+            motor["state"] = "ok"
+            motor["feedback_age_ms"] = 0
+            motor["last_feedback_at"] = time.time()
+            motor["detail"] = None
+        for bus in snapshot_dict.get("buses", []):
+            bus["state"] = "ok"
+        return snapshot_dict
 
     async def start(self) -> None:
         app = self.create_app()

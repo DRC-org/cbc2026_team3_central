@@ -330,6 +330,7 @@ async def main() -> None:
         motor_check_per_motor_timeout_ms=motor_check_settings["per_motor_timeout_ms"],
         motor_check_default_magnitude=motor_check_settings["default_magnitude"],
         motor_check_per_motor_overrides=motor_check_overrides,
+        dry_run=args.dry_run,
     )
     can_managers: list[CANManager] = []
 

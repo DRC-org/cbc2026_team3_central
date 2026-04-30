@@ -127,6 +127,11 @@ class TestProgress:
             "total_steps": 3,
             "waiting_trigger": False,
             "running": False,
+            "steps": [
+                {"index": 0, "label": "ステップ1", "require_trigger": False},
+                {"index": 1, "label": "ステップ2", "require_trigger": True},
+                {"index": 2, "label": "ステップ3", "require_trigger": False},
+            ],
         }
 
     async def test_progress_waiting_trigger(self):

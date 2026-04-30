@@ -18,7 +18,6 @@ import { Icon } from "./Icon";
 
 interface AppHeaderProps {
   title: string;
-  subtitle?: string;
   connected: boolean;
   onEStop: () => void;
 }
@@ -37,7 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/motors", label: "モータ調整", icon: SlidersHorizontal },
 ];
 
-export function AppHeader({ title, subtitle, connected, onEStop }: AppHeaderProps) {
+export function AppHeader({ title, connected, onEStop }: AppHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -72,25 +71,11 @@ export function AppHeader({ title, subtitle, connected, onEStop }: AppHeaderProp
           <h1 className="truncate text-xl font-bold text-[color:var(--color-text)] md:text-2xl">
             {title}
           </h1>
-          {subtitle ? (
-            <span className="truncate text-xs font-medium text-[color:var(--color-text-muted)] md:text-sm">
-              {subtitle}
-            </span>
-          ) : null}
         </div>
 
         <div className="hidden md:block">
           <ConnectionStatus connected={connected} />
         </div>
-
-        <button
-          type="button"
-          aria-label={isFullscreen ? "全画面解除" : "全画面表示"}
-          onClick={toggleFullscreen}
-          className="hidden h-10 w-10 items-center justify-center rounded-[10px] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-text-muted)] transition hover:bg-[color:var(--color-surface-2)] hover:text-[color:var(--color-text)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-accent)]/30 focus-visible:outline-none md:flex"
-        >
-          <Icon icon={isFullscreen ? Minimize2 : Maximize2} size={18} />
-        </button>
 
         <EStopButton onStop={onEStop} />
       </div>

@@ -26,12 +26,7 @@ function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[color:var(--color-bg)] text-[color:var(--color-text)]">
-      <AppHeader
-        title={meta.title}
-        subtitle={meta.subtitle}
-        connected={connected}
-        onEStop={onEStop}
-      />
+      <AppHeader title={meta.title} connected={connected} onEStop={onEStop} />
       <Outlet />
       <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
     </div>

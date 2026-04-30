@@ -22,31 +22,16 @@ motor_check:
   # 個別上書きしたい場合は motors[name].motor_check で行う。
 
 motors:
-  # DJI M3508 (C620 ESC) — CAN Standard Frame
-  # lift_motor:
-  #   driver: m3508
-  #   bus: m3508_bus
-  #   can_id: 2
-  #   motor_check:           # 個別上書き例 (任意)
-  #     magnitude: 800        # この個体のみ 800mA で動作確認
-  #     timeout_ms: 2000
+  # RobStride EDULITE 05 — 補助アーム関節
+  sub_arm_joint:
+    driver: edulite05
+    bus: edulite_bus
+    can_id: 2
+    mode: position
 
-  # RobStride EDULITE 05 — CAN Extended Frame
-  # arm_joint:
-  #   driver: edulite05
-  #   bus: edulite_bus
-  #   can_id: 2
-  #   mode: position
-  #   motor_check:           # 個別上書き例 (任意)
-  #     magnitude: 7.5        # この個体のみ 7.5deg で動作確認
-  #     timeout_ms: 2000
-
-  # 自作モータドライバ — CAN Standard Frame
-  # gripper:
-  #   driver: generic
-  #   bus: generic_bus
-  #   can_id: 0x02
-  #   control_type: position
-  #   motor_check:           # 個別上書き例 (任意)
-  #     magnitude: 0.2
-  #     timeout_ms: 2000
+  # 自作モータドライバ — 補助ハンドのグリッパ
+  sub_gripper:
+    driver: generic
+    bus: generic_bus
+    can_id: 0x02
+    control_type: position

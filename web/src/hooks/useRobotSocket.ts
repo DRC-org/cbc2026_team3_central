@@ -108,6 +108,12 @@ function mergeRecord(records: MotorCheckRecord[], next: MotorCheckRecord): Motor
   return copy;
 }
 
+export interface SequenceStepInfo {
+  index: number;
+  label: string;
+  require_trigger: boolean;
+}
+
 export interface RobotState {
   robot: string;
   sequence: string;
@@ -118,6 +124,7 @@ export interface RobotState {
   motors: Record<string, MotorState>;
   e_stop_active?: boolean;
   health?: HealthSnapshot;
+  steps?: SequenceStepInfo[];
 }
 
 interface UseRobotSocketReturn {
