@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 
-import { useRobot } from "../context/RobotContext";
-import type { MotorCheckState } from "./useRobotSocket";
+import { useRobot } from "@/context/RobotContext";
+import type { MotorCheckState } from "@/hooks/useRobotSocket";
 
 interface UseMotorCheckReturn {
   state: MotorCheckState;

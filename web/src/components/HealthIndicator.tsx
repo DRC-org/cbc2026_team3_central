@@ -1,14 +1,14 @@
 import { Activity, AlertTriangle, CheckCircle2, Cable, Cpu, XCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { Icon } from "@/components/Icon";
 import type {
   BusHealth,
   BusHealthState,
   HealthSnapshot,
   MotorHealth,
   MotorHealthState,
-} from "../hooks/useRobotSocket";
-import { Icon } from "./Icon";
+} from "@/hooks/useRobotSocket";
 
 interface HealthIndicatorProps {
   health: HealthSnapshot | undefined;

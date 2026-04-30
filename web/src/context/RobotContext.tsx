@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
-import type { HealthChangeEvent, MotorCheckState, RobotState } from "../hooks/useRobotSocket";
+import type { HealthChangeEvent, MotorCheckState, RobotState } from "@/hooks/useRobotSocket";
 
 interface RobotContextValue {
   states: Record<string, RobotState>;

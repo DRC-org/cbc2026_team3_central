@@ -1,8 +1,8 @@
 import { Cpu } from "lucide-react";
 
-import type { MotorState } from "../hooks/useRobotSocket";
-import { Icon } from "./Icon";
-import { StatPill } from "./StatPill";
+import { Icon } from "@/components/Icon";
+import { StatPill } from "@/components/StatPill";
+import type { MotorState } from "@/hooks/useRobotSocket";
 
 interface MotorStatusProps {
   name: string;

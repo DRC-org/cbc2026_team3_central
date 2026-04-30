@@ -1,7 +1,7 @@
 import { AlertTriangle, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Icon } from "./Icon";
+import { Icon } from "@/components/Icon";
 
 interface EStopOverlayProps {
   active: boolean;

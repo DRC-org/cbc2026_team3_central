@@ -1,6 +1,6 @@
 import { CheckCircle2, type LucideIcon, Play, Timer } from "lucide-react";
 
-import { Icon } from "./Icon";
+import { Icon } from "@/components/Icon";
 
 interface SequenceProgressProps {
   sequence: string;

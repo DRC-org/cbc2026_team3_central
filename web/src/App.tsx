@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { BrowserRouter } from "react-router-dom";
 
-import { RobotProvider } from "./context/RobotContext";
-import { useRobotSocket } from "./hooks/useRobotSocket";
-import { AppRoutes } from "./router";
+import { RobotProvider } from "@/context/RobotContext";
+import { useRobotSocket } from "@/hooks/useRobotSocket";
+import { AppRoutes } from "@/router";
 
 export function App() {
   const socket = useRobotSocket();

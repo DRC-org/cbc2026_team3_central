@@ -1,4 +1,4 @@
-import { StatusDot } from "./StatusDot";
+import { StatusDot } from "@/components/StatusDot";
 
 interface ConnectionStatusProps {
   connected: boolean;

@@ -1,7 +1,7 @@
 import { Check, ChevronRight, Hand, Play, RotateCcw } from "lucide-react";
 
-import type { SequenceStepInfo } from "../hooks/useRobotSocket";
-import { Icon } from "./Icon";
+import { Icon } from "@/components/Icon";
+import type { SequenceStepInfo } from "@/hooks/useRobotSocket";
 
 interface SequenceStepListProps {
   steps: SequenceStepInfo[];

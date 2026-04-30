@@ -2,9 +2,9 @@ import { Skeleton, Slider } from "@heroui/react";
 import { Send, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
-import { Icon } from "../components/Icon";
-import { MotorStatus } from "../components/MotorStatus";
-import { useRobot } from "../context/RobotContext";
+import { Icon } from "@/components/Icon";
+import { MotorStatus } from "@/components/MotorStatus";
+import { useRobot } from "@/context/RobotContext";
 
 const PID_PARAMS = [
   { key: "kp", label: "Kp", max: 10 },
@@ -35,7 +35,7 @@ export function MotorTuning() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 space-y-8 px-4 py-6 md:px-8 md:py-10">
+    <main className="mx-auto w-full max-w-6xl flex-1 space-y-8 overflow-y-auto px-4 py-6 md:px-8 md:py-10">
       {ROBOTS.map(({ key, label }) => {
         const state = states[key];
         return (

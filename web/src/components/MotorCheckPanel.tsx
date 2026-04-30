@@ -2,13 +2,9 @@ import { Button, Modal, Spinner } from "@heroui/react";
 import { AlertTriangle, CheckCircle2, Circle, Minus, RotateCw, Timer, XCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { useMotorCheck } from "../hooks/useMotorCheck";
-import type {
-  MotorCheckOverall,
-  MotorCheckRecord,
-  MotorCheckResult,
-} from "../hooks/useRobotSocket";
-import { Icon } from "./Icon";
+import { Icon } from "@/components/Icon";
+import { useMotorCheck } from "@/hooks/useMotorCheck";
+import type { MotorCheckOverall, MotorCheckRecord, MotorCheckResult } from "@/hooks/useRobotSocket";
 
 interface MotorCheckPanelProps {
   robotName: string;

@@ -1,9 +1,9 @@
 import { AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-import type { MotorState } from "../hooks/useRobotSocket";
-import { Icon } from "./Icon";
-import { MotorStatus } from "./MotorStatus";
+import { Icon } from "@/components/Icon";
+import { MotorStatus } from "@/components/MotorStatus";
+import type { MotorState } from "@/hooks/useRobotSocket";
 
 interface MotorSummaryProps {
   motors: Record<string, MotorState>;

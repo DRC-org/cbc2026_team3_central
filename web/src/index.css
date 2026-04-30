@@ -38,6 +38,13 @@
   --radius-control: 12px;
 }
 
+html,
+body,
+#root {
+  height: 100svh;
+  overflow: hidden;
+}
+
 html {
   font-size: 17px;
   color-scheme: light;
@@ -50,6 +57,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "ss01", "cv11";
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes e-stop-flash {

@@ -12,9 +12,9 @@ import {
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 
-import { ConnectionStatus } from "./ConnectionStatus";
-import { EStopButton } from "./EStopButton";
-import { Icon } from "./Icon";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { EStopButton } from "@/components/EStopButton";
+import { Icon } from "@/components/Icon";
 
 interface AppHeaderProps {
   title: string;

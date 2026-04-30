@@ -3,14 +3,14 @@ import { AlertTriangle, Bot, X, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { HealthIndicator } from "../components/HealthIndicator";
-import { Icon } from "../components/Icon";
-import { MotorCheckButton } from "../components/MotorCheckButton";
-import { MotorCheckPanel } from "../components/MotorCheckPanel";
-import { MotorSummary } from "../components/MotorSummary";
-import { SequenceProgress } from "../components/SequenceProgress";
-import { useRobot } from "../context/RobotContext";
-import type { BusHealthState, HealthChangeEvent, HealthSnapshot } from "../hooks/useRobotSocket";
+import { HealthIndicator } from "@/components/HealthIndicator";
+import { Icon } from "@/components/Icon";
+import { MotorCheckButton } from "@/components/MotorCheckButton";
+import { MotorCheckPanel } from "@/components/MotorCheckPanel";
+import { MotorSummary } from "@/components/MotorSummary";
+import { SequenceProgress } from "@/components/SequenceProgress";
+import { useRobot } from "@/context/RobotContext";
+import type { BusHealthState, HealthChangeEvent, HealthSnapshot } from "@/hooks/useRobotSocket";
 
 const ROBOTS = [
   { key: "main_hand", label: "メインハンド", path: "/main-hand" },
@@ -111,7 +111,7 @@ export function Dashboard() {
   }, [healthEvents]);
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-10">
+    <main className="mx-auto w-full max-w-7xl flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-10">
       <div className="mb-5 flex items-center justify-between gap-3 md:mb-6">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold tracking-wider text-[color:var(--color-text-subtle)] uppercase">

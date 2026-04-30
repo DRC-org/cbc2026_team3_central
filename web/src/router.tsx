@@ -1,11 +1,11 @@
 import { Outlet, Route, Routes, useLocation } from "react-router-dom";
 
-import { AppHeader } from "./components/AppHeader";
-import { EStopOverlay } from "./components/EStopOverlay";
-import { useRobot } from "./context/RobotContext";
-import { Dashboard } from "./pages/Dashboard";
-import { MotorTuning } from "./pages/MotorTuning";
-import { RobotControl } from "./pages/RobotControl";
+import { AppHeader } from "@/components/AppHeader";
+import { EStopOverlay } from "@/components/EStopOverlay";
+import { useRobot } from "@/context/RobotContext";
+import { Dashboard } from "@/pages/Dashboard";
+import { MotorTuning } from "@/pages/MotorTuning";
+import { RobotControl } from "@/pages/RobotControl";
 
 interface PageMeta {
   title: string;
@@ -25,7 +25,7 @@ function AppLayout() {
   const meta = PAGE_META[location.pathname] ?? { title: "CBC2026 Team3" };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[color:var(--color-bg)] text-[color:var(--color-text)]">
+    <div className="flex h-svh flex-col overflow-hidden bg-[color:var(--color-bg)] text-[color:var(--color-text)]">
       <AppHeader title={meta.title} connected={connected} onEStop={onEStop} />
       <Outlet />
       <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />

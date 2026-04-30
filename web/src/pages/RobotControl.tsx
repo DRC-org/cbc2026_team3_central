@@ -1,12 +1,12 @@
 import { Skeleton } from "@heroui/react";
 import { Play, Square } from "lucide-react";
 
-import { Icon } from "../components/Icon";
-import { MotorSummary } from "../components/MotorSummary";
-import { SequenceProgress } from "../components/SequenceProgress";
-import { SequenceStepList } from "../components/SequenceStepList";
-import { TriggerButton } from "../components/TriggerButton";
-import { useRobot } from "../context/RobotContext";
+import { Icon } from "@/components/Icon";
+import { MotorSummary } from "@/components/MotorSummary";
+import { SequenceProgress } from "@/components/SequenceProgress";
+import { SequenceStepList } from "@/components/SequenceStepList";
+import { TriggerButton } from "@/components/TriggerButton";
+import { useRobot } from "@/context/RobotContext";
 
 interface RobotControlProps {
   robotKey: string;
@@ -47,7 +47,7 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
   const inProgress = state && !state.waiting_trigger && !completed && !idleStopped;
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 md:px-8 md:py-10">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 overflow-y-auto px-4 py-6 md:px-8 md:py-10">
       {state ? (
         <>
           <section className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-[var(--shadow-card)] md:p-8">

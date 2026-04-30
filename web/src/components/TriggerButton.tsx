@@ -1,6 +1,6 @@
 import { CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
 
-import { Icon } from "./Icon";
+import { Icon } from "@/components/Icon";
 
 interface TriggerButtonProps {
   waiting: boolean;

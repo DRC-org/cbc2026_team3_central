@@ -2,9 +2,9 @@ import { Button, Modal, Spinner } from "@heroui/react";
 import { Activity, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
-import { useRobot } from "../context/RobotContext";
-import { useMotorCheck } from "../hooks/useMotorCheck";
-import { Icon } from "./Icon";
+import { Icon } from "@/components/Icon";
+import { useRobot } from "@/context/RobotContext";
+import { useMotorCheck } from "@/hooks/useMotorCheck";
 
 interface MotorCheckButtonProps {
   robotName: string;
