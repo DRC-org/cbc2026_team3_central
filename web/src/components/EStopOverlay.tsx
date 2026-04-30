@@ -1,8 +1,6 @@
 import { AlertTriangle, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Icon } from "@/components/Icon";
-
 interface EStopOverlayProps {
   active: boolean;
   onRelease: () => void;
@@ -97,7 +95,7 @@ export function EStopOverlay({ active, onRelease }: EStopOverlayProps) {
     >
       <div className="mb-10 flex flex-col items-center gap-3 select-none">
         <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 text-[color:var(--color-danger)] shadow-2xl">
-          <Icon icon={AlertTriangle} size={36} strokeWidth={2.6} />
+          <AlertTriangle size={36} strokeWidth={2.6} />
         </span>
         <h2 className="text-5xl font-black text-[color:var(--color-text)] drop-shadow md:text-6xl">
           緊急停止中
@@ -160,7 +158,7 @@ export function EStopOverlay({ active, onRelease }: EStopOverlayProps) {
               transition: snapping ? `transform ${SNAP_BACK_MS}ms ease-out` : "none",
             }}
           >
-            <Icon icon={RotateCw} size={56} strokeWidth={2.4} className="text-white" />
+            <RotateCw size={56} strokeWidth={2.4} className="text-white" />
           </div>
         </div>
       </div>

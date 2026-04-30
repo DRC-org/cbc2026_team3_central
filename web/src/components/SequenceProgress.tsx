@@ -1,6 +1,5 @@
+import { Chip, ProgressBar } from "@heroui/react";
 import { CheckCircle2, type LucideIcon, Play, Timer } from "lucide-react";
-
-import { Icon } from "@/components/Icon";
 
 interface SequenceProgressProps {
   sequence: string;
@@ -15,35 +14,36 @@ type StatusKey = "complete" | "waiting" | "running" | "idle";
 
 const STATUS: Record<
   StatusKey,
-  { label: string; icon: LucideIcon; tone: string; bar: string; pill: string }
+  {
+    label: string;
+    icon: LucideIcon;
+    chipColor: "success" | "warning" | "accent" | "default";
+    tone: string;
+  }
 > = {
   complete: {
     label: "完了",
     icon: CheckCircle2,
+    chipColor: "success",
     tone: "text-[color:oklch(35%_0.16_150)]",
-    bar: "bg-[color:var(--color-success)]",
-    pill: "bg-[color:var(--color-success-soft)] text-[color:oklch(35%_0.16_150)] ring-1 ring-[color:var(--color-success)]/30",
   },
   waiting: {
     label: "許可待ち",
     icon: Timer,
+    chipColor: "warning",
     tone: "text-[color:oklch(45%_0.16_70)]",
-    bar: "bg-[color:var(--color-warning)]",
-    pill: "bg-[color:var(--color-warning-soft)] text-[color:oklch(45%_0.16_70)] ring-1 ring-[color:var(--color-warning)]/40",
   },
   running: {
     label: "実行中",
     icon: Play,
+    chipColor: "accent",
     tone: "text-[color:var(--color-accent)]",
-    bar: "bg-[color:var(--color-accent)]",
-    pill: "bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)] ring-1 ring-[color:var(--color-accent)]/30",
   },
   idle: {
     label: "未開始",
     icon: Timer,
+    chipColor: "default",
     tone: "text-[color:var(--color-text-muted)]",
-    bar: "bg-[color:var(--color-border-strong)]",
-    pill: "bg-[color:var(--color-surface-2)] text-[color:var(--color-text-muted)] ring-1 ring-[color:var(--color-border)]",
   },
 };
 
@@ -60,6 +60,7 @@ export function SequenceProgress({
   const statusKey: StatusKey =
     totalSteps === 0 ? "idle" : isComplete ? "complete" : waitingTrigger ? "waiting" : "running";
   const status = STATUS[statusKey];
+  const StatusIcon = status.icon;
 
   return (
     <section className="flex flex-col gap-4">
@@ -72,12 +73,10 @@ export function SequenceProgress({
         >
           {sequence}
         </span>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${status.pill}`}
-        >
-          <Icon icon={status.icon} size={14} strokeWidth={2.5} />
-          {status.label}
-        </span>
+        <Chip color={status.chipColor} variant="soft" size="md">
+          <StatusIcon size={14} strokeWidth={2.5} />
+          <Chip.Label>{status.label}</Chip.Label>
+        </Chip>
       </div>
 
       <div className="flex items-end justify-between gap-4">
@@ -101,27 +100,14 @@ export function SequenceProgress({
             {currentStep ?? "—"}
           </p>
         </div>
-        <div className="text-right">
-          <div className="font-mono text-3xl font-bold text-[color:var(--color-text-muted)] tabular-nums">
-            {Math.round(percent)}
-            <span className="ml-0.5 text-base">%</span>
-          </div>
-        </div>
       </div>
 
-      <div
-        role="progressbar"
-        aria-label="シーケンス進行度"
-        aria-valuenow={Math.round(percent)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        className="relative h-3 w-full overflow-hidden rounded-full bg-[color:var(--color-surface-2)]"
-      >
-        <div
-          className={`h-full rounded-full transition-[width] duration-300 ease-out ${status.bar}`}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
+      <ProgressBar aria-label="シーケンス進行度" value={percent} className="w-full">
+        <ProgressBar.Output />
+        <ProgressBar.Track>
+          <ProgressBar.Fill />
+        </ProgressBar.Track>
+      </ProgressBar>
     </section>
   );
 }

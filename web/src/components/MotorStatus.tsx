@@ -1,7 +1,6 @@
+import { Card } from "@heroui/react";
 import { Cpu } from "lucide-react";
 
-import { Icon } from "@/components/Icon";
-import { StatPill } from "@/components/StatPill";
 import type { MotorState } from "@/hooks/useRobotSocket";
 
 interface MotorStatusProps {
@@ -12,29 +11,58 @@ interface MotorStatusProps {
 const TEMP_WARNING = 60;
 const TEMP_DANGER = 80;
 
-function tempTone(temp: number): "default" | "warning" | "danger" {
+type StatTone = "default" | "warning" | "danger";
+
+const STAT_TONE_CLASS: Record<StatTone, string> = {
+  default: "bg-[color:var(--color-surface-2)] text-[color:var(--color-text)]",
+  warning:
+    "bg-[color:var(--color-warning-soft)] text-[color:oklch(45%_0.16_70)] ring-1 ring-[color:oklch(70%_0.16_70)]/40",
+  danger:
+    "bg-[color:var(--color-danger-soft)] text-[color:oklch(40%_0.22_25)] ring-1 ring-[color:oklch(58%_0.22_25)]/40",
+};
+
+function tempTone(temp: number): StatTone {
   if (temp >= TEMP_DANGER) return "danger";
   if (temp >= TEMP_WARNING) return "warning";
   return "default";
 }
 
+interface StatProps {
+  label: string;
+  value: string;
+  unit?: string;
+  tone?: StatTone;
+}
+
+function Stat({ label, value, unit, tone = "default" }: StatProps) {
+  return (
+    <div className={`flex flex-col gap-0.5 rounded-[10px] px-3 py-2 ${STAT_TONE_CLASS[tone]}`}>
+      <span className="text-[11px] font-medium tracking-wider text-[color:var(--color-text-subtle)] uppercase">
+        {label}
+      </span>
+      <span className="font-mono text-base font-semibold tabular-nums">
+        {value}
+        {unit ? <span className="ml-1 text-xs font-normal opacity-70">{unit}</span> : null}
+      </span>
+    </div>
+  );
+}
+
 export function MotorStatus({ name, state }: MotorStatusProps) {
   return (
-    <article className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
-      <header className="flex items-center gap-2">
+    <Card variant="default" className="gap-3">
+      <Card.Header className="flex flex-row items-center gap-2">
         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]">
-          <Icon icon={Cpu} size={14} strokeWidth={2.5} />
+          <Cpu size={14} strokeWidth={2.5} />
         </span>
-        <h3 className="font-mono text-sm font-bold tracking-tight text-[color:var(--color-text)]">
-          {name}
-        </h3>
-      </header>
-      <div className="grid grid-cols-2 gap-2">
-        <StatPill label="位置" value={state.pos.toFixed(1)} />
-        <StatPill label="速度" value={state.vel.toFixed(1)} />
-        <StatPill label="トルク" value={state.torque.toFixed(2)} />
-        <StatPill label="温度" value={state.temp.toFixed(0)} unit="℃" tone={tempTone(state.temp)} />
-      </div>
-    </article>
+        <Card.Title className="font-mono text-sm font-bold tracking-tight">{name}</Card.Title>
+      </Card.Header>
+      <Card.Content className="grid grid-cols-2 gap-2">
+        <Stat label="位置" value={state.pos.toFixed(1)} />
+        <Stat label="速度" value={state.vel.toFixed(1)} />
+        <Stat label="トルク" value={state.torque.toFixed(2)} />
+        <Stat label="温度" value={state.temp.toFixed(0)} unit="℃" tone={tempTone(state.temp)} />
+      </Card.Content>
+    </Card>
   );
 }

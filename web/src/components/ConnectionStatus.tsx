@@ -1,20 +1,21 @@
-import { StatusDot } from "@/components/StatusDot";
+import { Chip, Spinner } from "@heroui/react";
 
 interface ConnectionStatusProps {
   connected: boolean;
 }
 
 export function ConnectionStatus({ connected }: ConnectionStatusProps) {
+  if (connected) {
+    return (
+      <Chip color="success" variant="soft" size="md">
+        <Chip.Label>接続中</Chip.Label>
+      </Chip>
+    );
+  }
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5"
-    >
-      <StatusDot tone={connected ? "success" : "danger"} pulse={!connected} />
-      <span className="text-sm font-semibold text-[color:var(--color-text)]">
-        {connected ? "接続中" : "再接続中..."}
-      </span>
-    </div>
+    <Chip color="danger" variant="soft" size="md">
+      <Spinner size="sm" color="danger" />
+      <Chip.Label>再接続中...</Chip.Label>
+    </Chip>
   );
 }

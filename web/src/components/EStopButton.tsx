@@ -1,3 +1,6 @@
+import { Button } from "@heroui/react";
+import { AlertTriangle } from "lucide-react";
+
 interface EStopButtonProps {
   onStop: () => void;
 }
@@ -5,14 +8,16 @@ interface EStopButtonProps {
 export function EStopButton({ onStop }: EStopButtonProps) {
   return (
     <div className="e-stop-stripe flex shrink-0 items-center justify-center rounded-[10px] p-[3px]">
-      <button
-        type="button"
-        onClick={onStop}
+      <Button
+        variant="danger"
+        size="md"
+        onPress={onStop}
         aria-label="緊急停止"
-        className="flex h-12 items-center gap-2 rounded-[7px] bg-[color:var(--color-danger)] px-4 text-sm font-black tracking-wider text-white shadow-[0_2px_6px_rgba(0,0,0,0.18)] transition hover:bg-[oklch(52%_0.24_25)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-danger)]/40 focus-visible:outline-none active:translate-y-px"
+        className="rounded-[7px] font-black tracking-wider"
       >
-        <span>EMG STOP</span>
-      </button>
+        <AlertTriangle size={20} strokeWidth={2.5} />
+        EMG STOP
+      </Button>
     </div>
   );
 }

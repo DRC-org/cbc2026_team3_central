@@ -1,8 +1,7 @@
-import { Button, Modal, Spinner } from "@heroui/react";
+import { Alert, Button, Modal, ProgressBar, Spinner } from "@heroui/react";
 import { AlertTriangle, CheckCircle2, Circle, Minus, RotateCw, Timer, XCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Icon } from "@/components/Icon";
 import { useMotorCheck } from "@/hooks/useMotorCheck";
 import type { MotorCheckOverall, MotorCheckRecord, MotorCheckResult } from "@/hooks/useRobotSocket";
 
@@ -126,11 +125,11 @@ function formatNumber(value: number): string {
 }
 
 function MotorRow({ record, isCurrent }: { record: MotorCheckRecord; isCurrent: boolean }) {
-  // current モータは記録上は pending のことがあるので running 表示に寄せる
   const result: MotorCheckResult =
     isCurrent && record.result === "pending" ? "running" : record.result;
   const style = RESULT_STYLES[result];
   const description = describeRecord({ ...record, result });
+  const RowIcon = style.icon;
 
   return (
     <div
@@ -140,7 +139,7 @@ function MotorRow({ record, isCurrent }: { record: MotorCheckRecord; isCurrent: 
         {result === "running" ? (
           <Spinner size="sm" />
         ) : (
-          <Icon icon={style.icon} size={18} strokeWidth={2.5} className={style.text} />
+          <RowIcon size={18} strokeWidth={2.5} className={style.text} />
         )}
         <div className="flex min-w-0 flex-col">
           <span className="truncate font-mono text-sm font-semibold text-[color:var(--color-text)]">
@@ -185,7 +184,7 @@ export function MotorCheckPanel({ robotName, isOpen, onOpenChange }: MotorCheckP
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${overallStyle.bg} ${overallStyle.text} ${overallStyle.ring}`}
                   >
-                    <Icon icon={overallStyle.icon} size={14} strokeWidth={2.6} />
+                    <overallStyle.icon size={14} strokeWidth={2.6} />
                     {overallStyle.label}
                   </span>
                 ) : null}
@@ -193,7 +192,7 @@ export function MotorCheckPanel({ robotName, isOpen, onOpenChange }: MotorCheckP
             </Modal.Header>
             <Modal.Body className="flex flex-col gap-4 p-5">
               {isRunning ? (
-                <div className="flex flex-col gap-2">
+                <ProgressBar aria-label="動作確認進行度" value={percent} className="w-full">
                   <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
                     <span className="font-mono tabular-nums">
                       {index} / {total}
@@ -202,30 +201,20 @@ export function MotorCheckPanel({ robotName, isOpen, onOpenChange }: MotorCheckP
                       {state.current ?? "—"}
                     </span>
                   </div>
-                  <div
-                    role="progressbar"
-                    aria-label="動作確認進行度"
-                    aria-valuenow={percent}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    className="relative h-2 w-full overflow-hidden rounded-full bg-[color:var(--color-surface-2)]"
-                  >
-                    <div
-                      className="h-full rounded-full bg-[color:var(--color-accent)] transition-[width] duration-300 ease-out"
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                </div>
+                  <ProgressBar.Track>
+                    <ProgressBar.Fill />
+                  </ProgressBar.Track>
+                </ProgressBar>
               ) : null}
 
               {isError ? (
-                <div className="flex items-start gap-2 rounded-[10px] bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-500/40">
-                  <Icon icon={XCircle} size={18} strokeWidth={2.5} className="mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="font-bold">エラー</div>
-                    <div className="truncate">{state.error}</div>
-                  </div>
-                </div>
+                <Alert status="danger">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Title>エラー</Alert.Title>
+                    <Alert.Description>{state.error}</Alert.Description>
+                  </Alert.Content>
+                </Alert>
               ) : null}
 
               {state.records.length === 0 && !isRunning && !isError ? (
@@ -257,15 +246,15 @@ export function MotorCheckPanel({ robotName, isOpen, onOpenChange }: MotorCheckP
                 </div>
                 <div className="flex gap-2">
                   {isRunning ? (
-                    <Button type="button" variant="outline" onClick={abort}>
+                    <Button variant="outline" onPress={abort}>
                       中断
                     </Button>
                   ) : state.records.length > 0 || isError ? (
-                    <Button type="button" variant="outline" onClick={start}>
+                    <Button variant="outline" onPress={start}>
                       リトライ
                     </Button>
                   ) : null}
-                  <Button type="button" variant="primary" onClick={() => onOpenChange(false)}>
+                  <Button slot="close" variant="primary">
                     閉じる
                   </Button>
                 </div>

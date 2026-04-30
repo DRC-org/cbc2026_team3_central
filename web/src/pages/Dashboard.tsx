@@ -1,10 +1,10 @@
-import { Skeleton } from "@heroui/react";
-import { AlertTriangle, Bot, X, XCircle } from "lucide-react";
+import { Alert, Card, CloseButton, Skeleton } from "@heroui/react";
+import { linkVariants } from "@heroui/styles";
+import { Bot } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link as RouterLink } from "react-router-dom";
 
 import { HealthIndicator } from "@/components/HealthIndicator";
-import { Icon } from "@/components/Icon";
 import { MotorCheckButton } from "@/components/MotorCheckButton";
 import { MotorCheckPanel } from "@/components/MotorCheckPanel";
 import { MotorSummary } from "@/components/MotorSummary";
@@ -19,7 +19,6 @@ const ROBOTS = [
 
 const STATE_RANK: Record<BusHealthState, number> = { ok: 0, degraded: 1, down: 2 };
 
-// 両ロボットの中で最も悪い overall を全体ヘッダ表示に使う
 function worstOverall(snapshots: (HealthSnapshot | undefined)[]): BusHealthState | undefined {
   let worst: BusHealthState | undefined;
   for (const snap of snapshots) {
@@ -35,62 +34,40 @@ const TOAST_VISIBLE_MS = 5000;
 
 interface ToastState {
   event: HealthChangeEvent;
-  // 同一イベントの再描画判定に使うため receivedAt を id 兼用にする
   id: number;
 }
 
 function HealthToast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-  const isCritical = toast.event.level === "critical";
-  const tone = isCritical
-    ? {
-        bg: "bg-red-50",
-        text: "text-red-700",
-        ring: "ring-red-500/40",
-        icon: XCircle,
-      }
-    : {
-        bg: "bg-amber-50",
-        text: "text-amber-700",
-        ring: "ring-amber-500/40",
-        icon: AlertTriangle,
-      };
-
+  const status = toast.event.level === "critical" ? "danger" : "warning";
   return (
-    <div
-      role="alert"
-      className={`pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-[var(--radius-card)] p-4 shadow-[var(--shadow-elev)] ring-1 ${tone.bg} ${tone.text} ${tone.ring}`}
+    <Alert
+      status={status}
+      className="pointer-events-auto w-80 max-w-[calc(100vw-2rem)] shadow-[var(--shadow-elev)]"
     >
-      <Icon icon={tone.icon} size={20} strokeWidth={2.5} className="mt-0.5 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-xs font-bold tracking-wider uppercase">
-          <span>{toast.event.level}</span>
-          <span className="opacity-60">·</span>
-          <span className="font-mono normal-case opacity-80">{toast.event.robot}</span>
-        </div>
-        <div className="mt-1 truncate font-mono text-xs opacity-80">{toast.event.target}</div>
-        <div className="mt-1 text-sm font-semibold">
-          {toast.event.from} → {toast.event.to}
-        </div>
-        {toast.event.message ? (
-          <div className="mt-1 truncate text-xs opacity-80">{toast.event.message}</div>
-        ) : null}
-      </div>
-      <button
-        type="button"
-        aria-label="通知を閉じる"
-        onClick={onDismiss}
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-black/5 ${tone.text}`}
-      >
-        <Icon icon={X} size={14} strokeWidth={2.5} />
-      </button>
-    </div>
+      <Alert.Indicator />
+      <Alert.Content>
+        <Alert.Title>
+          <span className="text-xs font-bold tracking-wider uppercase">{toast.event.level}</span>
+          <span className="ml-2 font-mono text-xs opacity-80">{toast.event.robot}</span>
+        </Alert.Title>
+        <Alert.Description>
+          <div className="font-mono text-xs opacity-80">{toast.event.target}</div>
+          <div className="mt-1 text-sm font-semibold">
+            {toast.event.from} → {toast.event.to}
+          </div>
+          {toast.event.message ? (
+            <div className="mt-1 truncate text-xs opacity-80">{toast.event.message}</div>
+          ) : null}
+        </Alert.Description>
+      </Alert.Content>
+      <CloseButton aria-label="通知を閉じる" onPress={onDismiss} />
+    </Alert>
   );
 }
 
 export function Dashboard() {
   const { states, healthEvents } = useRobot();
   const [toast, setToast] = useState<ToastState | null>(null);
-  // ロボット名 → パネル開閉。ボタン押下で開く、閉じるは手動
   const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({});
 
   const overall = useMemo(
@@ -98,7 +75,6 @@ export function Dashboard() {
     [states],
   );
 
-  // info レベルは UI ノイズになるので警告以上のみ表示。直近 1 件を 5 秒間
   useEffect(() => {
     const latest = healthEvents[0];
     if (!latest) return;
@@ -137,34 +113,29 @@ export function Dashboard() {
         {ROBOTS.map(({ key, label, path }) => {
           const state = states[key];
           return (
-            <article
-              key={key}
-              className="flex flex-col gap-6 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-[var(--shadow-card)] md:p-8"
-            >
-              <header className="flex items-center justify-between gap-3">
+            <Card key={key} variant="default" className="gap-6 !p-6 md:!p-8">
+              <Card.Header className="flex flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]">
-                    <Icon icon={Bot} size={22} strokeWidth={2.4} />
+                    <Bot size={22} strokeWidth={2.4} />
                   </span>
                   <div>
-                    <h2 className="text-2xl font-extrabold text-[color:var(--color-text)] md:text-3xl">
-                      {label}
-                    </h2>
-                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                    <Card.Title className="text-2xl font-extrabold md:text-3xl">{label}</Card.Title>
+                    <Card.Description className="text-xs font-medium">
                       {state ? "受信中" : "データ未受信"}
-                    </p>
+                    </Card.Description>
                   </div>
                 </div>
-                <Link
+                <RouterLink
                   to={path}
-                  className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-sm font-semibold text-[color:var(--color-accent)] transition hover:bg-[color:var(--color-accent-soft)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-accent)]/30 focus-visible:outline-none"
+                  className={`${linkVariants().base()} rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-sm font-semibold !no-underline hover:bg-[color:var(--color-accent-soft)]`}
                 >
                   操縦画面 →
-                </Link>
-              </header>
+                </RouterLink>
+              </Card.Header>
 
               {state ? (
-                <>
+                <Card.Content className="flex flex-col gap-6">
                   <SequenceProgress
                     sequence={state.sequence}
                     currentStep={state.current_step}
@@ -182,22 +153,22 @@ export function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setPanelOpen((prev) => ({ ...prev, [key]: true }))}
-                      className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--color-text-muted)] transition hover:bg-[color:var(--color-surface-2)] hover:text-[color:var(--color-text)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-accent)]/30 focus-visible:outline-none"
+                      className={`${linkVariants().base()} rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-xs font-semibold !text-[color:var(--color-text-muted)] !no-underline hover:bg-[color:var(--color-surface-2)] hover:!text-[color:var(--color-text)]`}
                     >
                       結果を表示
                     </button>
                   </div>
                   <MotorSummary motors={state.motors} />
-                </>
+                </Card.Content>
               ) : (
-                <div className="space-y-3">
+                <Card.Content className="space-y-3">
                   <Skeleton className="h-7 w-3/4 rounded" />
                   <Skeleton className="h-12 w-1/2 rounded" />
                   <Skeleton className="h-3 w-full rounded" />
                   <Skeleton className="h-16 w-full rounded" />
-                </div>
+                </Card.Content>
               )}
-            </article>
+            </Card>
           );
         })}
       </div>

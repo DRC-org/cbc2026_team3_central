@@ -1,8 +1,7 @@
-import { Skeleton, Slider } from "@heroui/react";
+import { Button, Skeleton, Slider } from "@heroui/react";
 import { Send, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
-import { Icon } from "@/components/Icon";
 import { MotorStatus } from "@/components/MotorStatus";
 import { useRobot } from "@/context/RobotContext";
 
@@ -42,7 +41,7 @@ export function MotorTuning() {
           <section key={key} className="flex flex-col gap-4">
             <h2 className="flex items-center gap-2 text-2xl font-extrabold text-[color:var(--color-text)]">
               <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]">
-                <Icon icon={SlidersHorizontal} size={18} strokeWidth={2.4} />
+                <SlidersHorizontal size={18} strokeWidth={2.4} />
               </span>
               {label}
             </h2>
@@ -95,14 +94,14 @@ export function MotorTuning() {
                                 <Slider.Thumb />
                               </Slider.Track>
                             </Slider>
-                            <button
-                              type="button"
-                              onClick={() => handleSend(motorName, paramKey)}
-                              className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-white transition hover:bg-[color:var(--color-accent-hover)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-accent)]/30 focus-visible:outline-none active:translate-y-px"
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onPress={() => handleSend(motorName, paramKey)}
                             >
-                              <Icon icon={Send} size={14} strokeWidth={2.4} />
+                              <Send size={14} strokeWidth={2.4} />
                               送信
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       ))}

@@ -1,6 +1,7 @@
+import { AlertDialog, Button } from "@heroui/react";
 import { Check, ChevronRight, Hand, Play, RotateCcw } from "lucide-react";
+import { useState } from "react";
 
-import { Icon } from "@/components/Icon";
 import type { SequenceStepInfo } from "@/hooks/useRobotSocket";
 
 interface SequenceStepListProps {
@@ -18,24 +19,20 @@ function classifyStep(
   totalSteps: number,
   waitingTrigger: boolean,
 ): StepKind {
-  // 完走後 (stepIndex >= totalSteps): すべて done
   if (stepIndex >= totalSteps) return "done";
   if (i < stepIndex) return "done";
   if (i === stepIndex) return waitingTrigger ? "waiting" : "current";
   return "future";
 }
 
-const STEP_BASE =
-  "group relative flex min-h-[72px] w-44 shrink-0 flex-col gap-1 rounded-[12px] border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-4";
-
-const STEP_TONE: Record<StepKind, string> = {
-  done: "border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-surface)] focus-visible:ring-[color:var(--color-accent)]/30",
+const STEP_TONE_CLASS: Record<StepKind, string> = {
+  done: "!bg-[color:var(--color-surface-2)] !text-[color:var(--color-text-muted)] !border-[color:var(--color-border)]",
   current:
-    "border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-white shadow-[var(--shadow-elev)] hover:brightness-110 focus-visible:ring-[color:var(--color-accent)]/40",
+    "!bg-[color:var(--color-accent)] !text-white !border-[color:var(--color-accent)] !shadow-[var(--shadow-elev)]",
   waiting:
-    "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[color:oklch(40%_0.16_70)] shadow-[var(--shadow-card)] hover:brightness-105 focus-visible:ring-[color:var(--color-warning)]/40",
+    "!bg-[color:var(--color-warning-soft)] !text-[color:oklch(40%_0.16_70)] !border-[color:var(--color-warning)] !shadow-[var(--shadow-card)]",
   future:
-    "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-text)] hover:bg-[color:var(--color-surface-2)] focus-visible:ring-[color:var(--color-accent)]/30",
+    "!bg-[color:var(--color-surface)] !text-[color:var(--color-text)] !border-[color:var(--color-border)]",
 };
 
 export function SequenceStepList({
@@ -44,6 +41,9 @@ export function SequenceStepList({
   waitingTrigger,
   onJump,
 }: SequenceStepListProps) {
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+
   if (steps.length === 0) {
     return (
       <p className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-4 text-sm text-[color:var(--color-text-muted)]">
@@ -53,16 +53,18 @@ export function SequenceStepList({
   }
 
   const totalSteps = steps.length;
+  const target = pendingIndex !== null ? steps[pendingIndex] : null;
 
-  const handleJump = (index: number) => {
+  const handleRequestJump = (index: number) => {
     if (index === stepIndex) return;
-    const target = steps[index];
-    const ok = window.confirm(
-      `ステップ ${index + 1} 「${target.label}」 から再開しますか？\n\n` +
-        "現在の動作を中断して指定ステップから実行を開始します。\n" +
-        "物理状態が安全であることを必ず確認してください。",
-    );
-    if (ok) onJump(index);
+    setPendingIndex(index);
+    setIsOpen(true);
+  };
+
+  const handleConfirm = () => {
+    if (pendingIndex !== null) onJump(pendingIndex);
+    setIsOpen(false);
+    setPendingIndex(null);
   };
 
   return (
@@ -72,7 +74,7 @@ export function SequenceStepList({
           ステップ一覧
         </h3>
         <span className="flex items-center gap-1 text-xs text-[color:var(--color-text-muted)]">
-          <Icon icon={RotateCcw} size={12} />
+          <RotateCcw size={12} />
           クリックで任意の位置から再開
         </span>
       </div>
@@ -80,42 +82,42 @@ export function SequenceStepList({
         <ol className="flex items-stretch gap-2">
           {steps.map((step, i) => {
             const kind = classifyStep(i, stepIndex, totalSteps, waitingTrigger);
-            // 待機中の矢印強調: 現在ステップ (waiting) → 次ステップ の間
             const arrowHighlighted = waitingTrigger && i === stepIndex;
             return (
               <li key={step.index} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleJump(i)}
+                <Button
+                  variant="outline"
+                  size="md"
+                  onPress={() => handleRequestJump(i)}
                   aria-current={kind === "current" || kind === "waiting" ? "step" : undefined}
-                  className={`${STEP_BASE} ${STEP_TONE[kind]}`}
+                  aria-label={`ステップ ${i + 1}: ${step.label}`}
+                  className={`relative !h-auto !min-h-[72px] !w-44 shrink-0 flex-col !items-start !justify-start gap-1 rounded-[12px] !px-3 !py-2.5 text-left ${STEP_TONE_CLASS[kind]}`}
                 >
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase opacity-90">
+                  <span className="flex w-full items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase opacity-90">
                     <span className="font-mono">#{i + 1}</span>
                     {step.require_trigger ? (
                       <span className="inline-flex items-center gap-0.5">
-                        <Icon icon={Hand} size={11} strokeWidth={2.5} />
+                        <Hand size={11} strokeWidth={2.5} />
                         <span>手動</span>
                       </span>
                     ) : null}
                   </span>
-                  <span className="line-clamp-2 text-sm leading-tight font-semibold">
+                  <span className="line-clamp-2 w-full text-sm leading-tight font-semibold">
                     {step.label}
                   </span>
                   {kind === "done" ? (
                     <span className="absolute top-1.5 right-1.5 text-[color:oklch(55%_0.16_150)]">
-                      <Icon icon={Check} size={14} strokeWidth={3} />
+                      <Check size={14} strokeWidth={3} />
                     </span>
                   ) : null}
                   {kind === "current" ? (
                     <span className="absolute top-1.5 right-1.5 text-white/90">
-                      <Icon icon={Play} size={12} strokeWidth={3} />
+                      <Play size={12} strokeWidth={3} />
                     </span>
                   ) : null}
-                </button>
+                </Button>
                 {i < steps.length - 1 ? (
-                  <Icon
-                    icon={ChevronRight}
+                  <ChevronRight
                     size={20}
                     strokeWidth={3}
                     className={
@@ -130,6 +132,34 @@ export function SequenceStepList({
           })}
         </ol>
       </div>
+
+      <AlertDialog.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>
+        <AlertDialog.Container>
+          <AlertDialog.Dialog className="sm:max-w-[440px]">
+            <AlertDialog.Header>
+              <AlertDialog.Icon status="warning" />
+              <AlertDialog.Heading>
+                ステップ {pendingIndex !== null ? pendingIndex + 1 : ""}{" "}
+                {target ? `「${target.label}」` : ""} から再開しますか？
+              </AlertDialog.Heading>
+            </AlertDialog.Header>
+            <AlertDialog.Body>
+              <p>現在の動作を中断して指定ステップから実行を開始します。</p>
+              <p className="mt-2 text-sm font-semibold text-[color:var(--color-danger)]">
+                物理状態が安全であることを必ず確認してください。
+              </p>
+            </AlertDialog.Body>
+            <AlertDialog.Footer>
+              <Button slot="close" variant="tertiary">
+                キャンセル
+              </Button>
+              <Button slot="close" onPress={handleConfirm}>
+                再開
+              </Button>
+            </AlertDialog.Footer>
+          </AlertDialog.Dialog>
+        </AlertDialog.Container>
+      </AlertDialog.Backdrop>
     </div>
   );
 }

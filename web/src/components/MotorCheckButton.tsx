@@ -1,8 +1,7 @@
-import { Button, Modal, Spinner } from "@heroui/react";
+import { Button, Modal, Spinner, Tooltip } from "@heroui/react";
 import { Activity, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
-import { Icon } from "@/components/Icon";
 import { useRobot } from "@/context/RobotContext";
 import { useMotorCheck } from "@/hooks/useMotorCheck";
 
@@ -17,8 +16,6 @@ export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonPro
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const robotState = states[robotName];
-  // 通常シーケンスが進行中（waiting_trigger=false かつ最終ステップに達していない）の判定
-  // 受信状態がそもそも無い場合は実行中と見なさない
   const sequenceRunning = Boolean(
     robotState &&
     robotState.total_steps > 0 &&
@@ -47,29 +44,30 @@ export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonPro
 
   return (
     <>
-      <span title={reasonLabel} className="inline-flex">
-        <Button
-          type="button"
-          variant="outline"
-          size="md"
-          isDisabled={disabled}
-          onClick={() => setConfirmOpen(true)}
-          className="gap-2"
-          aria-label={`${robotName} の動作確認を開始`}
-        >
-          {checkRunning ? (
-            <>
-              <Spinner size="sm" />
-              <span className="text-sm font-semibold">実行中...</span>
-            </>
-          ) : (
-            <>
-              <Icon icon={Activity} size={16} strokeWidth={2.5} />
-              <span className="text-sm font-semibold">動作確認</span>
-            </>
-          )}
-        </Button>
-      </span>
+      <Tooltip>
+        <Tooltip.Trigger>
+          <Button
+            variant="outline"
+            size="md"
+            isDisabled={disabled}
+            onPress={() => setConfirmOpen(true)}
+            aria-label={`${robotName} の動作確認を開始`}
+          >
+            {checkRunning ? (
+              <>
+                <Spinner size="sm" />
+                <span className="text-sm font-semibold">実行中...</span>
+              </>
+            ) : (
+              <>
+                <Activity size={16} strokeWidth={2.5} />
+                <span className="text-sm font-semibold">動作確認</span>
+              </>
+            )}
+          </Button>
+        </Tooltip.Trigger>
+        <Tooltip.Content>{reasonLabel}</Tooltip.Content>
+      </Tooltip>
 
       <Modal>
         <Modal.Backdrop isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
@@ -78,7 +76,7 @@ export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonPro
               <Modal.Header className="border-b border-[color:var(--color-border)]">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--color-warning-soft)] text-[color:oklch(45%_0.16_70)]">
-                    <Icon icon={AlertTriangle} size={20} strokeWidth={2.5} />
+                    <AlertTriangle size={20} strokeWidth={2.5} />
                   </span>
                   <Modal.Heading className="text-lg font-bold text-[color:var(--color-text)]">
                     アクチュエータ動作確認
@@ -99,10 +97,10 @@ export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonPro
               </Modal.Body>
               <Modal.Footer className="border-t border-[color:var(--color-border)]">
                 <div className="flex w-full justify-end gap-2">
-                  <Button type="button" variant="ghost" onClick={() => setConfirmOpen(false)}>
+                  <Button slot="close" variant="ghost">
                     キャンセル
                   </Button>
-                  <Button type="button" variant="primary" onClick={handleConfirmStart}>
+                  <Button variant="primary" onPress={handleConfirmStart}>
                     開始
                   </Button>
                 </div>

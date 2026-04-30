@@ -1,4 +1,4 @@
-import { Drawer } from "@heroui/react";
+import { Button, Drawer } from "@heroui/react";
 import {
   Bot,
   LayoutDashboard,
@@ -14,7 +14,6 @@ import { NavLink } from "react-router-dom";
 
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { EStopButton } from "@/components/EStopButton";
-import { Icon } from "@/components/Icon";
 
 interface AppHeaderProps {
   title: string;
@@ -57,15 +56,16 @@ export function AppHeader({ title, connected, onEStop }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)]/85 px-4 py-3 backdrop-blur-md md:px-6">
       <div className="flex items-center gap-3">
-        <button
-          type="button"
+        <Button
+          isIconOnly
+          variant="outline"
+          size="md"
           aria-label="メニューを開く"
           aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-text)] transition hover:bg-[color:var(--color-surface-2)] focus-visible:ring-4 focus-visible:ring-[color:var(--color-accent)]/30 focus-visible:outline-none"
+          onPress={() => setMenuOpen(true)}
         >
-          <Icon icon={Menu} size={20} />
-        </button>
+          <Menu size={20} />
+        </Button>
 
         <div className="flex min-w-0 flex-1 flex-col leading-tight">
           <h1 className="truncate text-xl font-bold text-[color:var(--color-text)] md:text-2xl">
@@ -76,6 +76,17 @@ export function AppHeader({ title, connected, onEStop }: AppHeaderProps) {
         <div className="hidden md:block">
           <ConnectionStatus connected={connected} />
         </div>
+
+        <Button
+          isIconOnly
+          variant="outline"
+          size="md"
+          aria-label={isFullscreen ? "全画面解除" : "全画面表示"}
+          onPress={toggleFullscreen}
+          className="hidden md:!flex"
+        >
+          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        </Button>
 
         <EStopButton onStop={onEStop} />
       </div>
@@ -93,19 +104,20 @@ export function AppHeader({ title, connected, onEStop }: AppHeaderProps) {
                   <Drawer.Heading className="text-lg font-bold text-[color:var(--color-text)]">
                     メニュー
                   </Drawer.Heading>
-                  <button
-                    type="button"
+                  <Button
+                    isIconOnly
+                    variant="ghost"
+                    size="sm"
                     aria-label="メニューを閉じる"
-                    onClick={() => setMenuOpen(false)}
-                    className="flex h-9 w-9 items-center justify-center rounded-[10px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-surface-2)]"
+                    onPress={() => setMenuOpen(false)}
                   >
-                    <Icon icon={X} size={18} />
-                  </button>
+                    <X size={18} />
+                  </Button>
                 </div>
               </Drawer.Header>
               <Drawer.Body className="p-3">
                 <nav className="flex flex-col gap-1">
-                  {NAV_ITEMS.map(({ to, label, icon, end }) => (
+                  {NAV_ITEMS.map(({ to, label, icon: ItemIcon, end }) => (
                     <NavLink
                       key={to}
                       to={to}
@@ -119,22 +131,23 @@ export function AppHeader({ title, connected, onEStop }: AppHeaderProps) {
                         }`
                       }
                     >
-                      <Icon icon={icon} size={18} />
+                      <ItemIcon size={18} />
                       <span>{label}</span>
                     </NavLink>
                   ))}
                   <div className="my-2 border-t border-[color:var(--color-border)]" />
-                  <button
-                    type="button"
-                    onClick={() => {
+                  <Button
+                    variant="ghost"
+                    fullWidth
+                    onPress={() => {
                       toggleFullscreen();
                       setMenuOpen(false);
                     }}
-                    className="flex items-center gap-3 rounded-[10px] px-3 py-3 text-base font-medium text-[color:var(--color-text)] transition hover:bg-[color:var(--color-surface-2)]"
+                    className="!justify-start gap-3 !px-3 !py-3 text-base"
                   >
-                    <Icon icon={isFullscreen ? Minimize2 : Maximize2} size={18} />
+                    {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
                     <span>{isFullscreen ? "全画面解除" : "全画面表示"}</span>
-                  </button>
+                  </Button>
                 </nav>
               </Drawer.Body>
             </Drawer.Dialog>
