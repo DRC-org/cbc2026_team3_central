@@ -6,6 +6,7 @@ import type { MotorState } from "@/hooks/useRobotSocket";
 interface MotorStatusProps {
   name: string;
   state: MotorState;
+  compact?: boolean;
 }
 
 const TEMP_WARNING = 60;
@@ -48,7 +49,62 @@ function Stat({ label, value, unit, tone = "default" }: StatProps) {
   );
 }
 
-export function MotorStatus({ name, state }: MotorStatusProps) {
+interface CompactCellProps {
+  label: string;
+  value: string;
+  unit?: string;
+  tone?: StatTone;
+}
+
+function CompactCell({ label, value, unit, tone = "default" }: CompactCellProps) {
+  const isHighlighted = tone !== "default";
+  return (
+    <div className="flex min-w-0 flex-col items-end gap-0">
+      <span className="text-[9px] font-medium tracking-wider text-[color:var(--color-text-subtle)] uppercase">
+        {label}
+      </span>
+      <span
+        className={`font-mono text-xs font-semibold tabular-nums ${
+          isHighlighted
+            ? tone === "danger"
+              ? "text-[color:oklch(40%_0.22_25)]"
+              : "text-[color:oklch(45%_0.16_70)]"
+            : "text-[color:var(--color-text)]"
+        }`}
+      >
+        {value}
+        {unit ? <span className="ml-0.5 text-[9px] font-normal opacity-70">{unit}</span> : null}
+      </span>
+    </div>
+  );
+}
+
+export function MotorStatus({ name, state, compact = false }: MotorStatusProps) {
+  if (compact) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-[10px] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 py-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]">
+            <Cpu size={12} strokeWidth={2.5} />
+          </span>
+          <span className="truncate font-mono text-xs font-bold tracking-tight text-[color:var(--color-text)]">
+            {name}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2.5">
+          <CompactCell label="位置" value={state.pos.toFixed(0)} />
+          <CompactCell label="速度" value={state.vel.toFixed(0)} />
+          <CompactCell
+            label="温度"
+            value={state.temp.toFixed(0)}
+            unit="℃"
+            tone={tempTone(state.temp)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card variant="default" className="gap-3">
       <Card.Header className="flex flex-row items-center gap-2">

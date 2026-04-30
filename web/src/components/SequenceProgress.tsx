@@ -63,47 +63,49 @@ export function SequenceProgress({
   const StatusIcon = status.icon;
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-xs font-semibold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
-          シーケンス
-        </span>
-        <span
-          className={`font-bold text-[color:var(--color-text)] ${large ? "text-xl" : "text-lg"}`}
-        >
-          {sequence}
-        </span>
-        <Chip color={status.chipColor} variant="soft" size="md">
-          <StatusIcon size={14} strokeWidth={2.5} />
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="text-[10px] font-semibold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
+            シーケンス
+          </span>
+          <span
+            className={`truncate font-bold text-[color:var(--color-text)] ${large ? "text-base" : "text-sm"}`}
+          >
+            {sequence}
+          </span>
+        </div>
+        <Chip color={status.chipColor} variant="soft" size="sm">
+          <StatusIcon size={12} strokeWidth={2.5} />
           <Chip.Label>{status.label}</Chip.Label>
         </Chip>
       </div>
 
-      <div className="flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-2">
-            <span
-              className={`font-mono font-extrabold text-[color:var(--color-text)] tabular-nums ${
-                large ? "text-5xl" : "text-4xl"
-              }`}
-            >
-              {totalSteps > 0 ? stepIndex + 1 : 0}
-            </span>
-            <span className="text-2xl font-medium text-[color:var(--color-text-subtle)]">
-              / {totalSteps}
-            </span>
-          </div>
-          <p
-            className={`mt-1 truncate font-semibold ${status.tone} ${large ? "text-xl" : "text-lg"}`}
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span
+            className={`font-mono font-extrabold text-[color:var(--color-text)] tabular-nums ${
+              large ? "text-4xl" : "text-3xl"
+            }`}
+          >
+            {totalSteps > 0 ? stepIndex + 1 : 0}
+          </span>
+          <span className="text-lg font-medium text-[color:var(--color-text-subtle)]">
+            / {totalSteps}
+          </span>
+          <span
+            className={`ml-1 truncate font-semibold ${status.tone} ${large ? "text-base" : "text-sm"}`}
             title={currentStep ?? undefined}
           >
             {currentStep ?? "—"}
-          </p>
+          </span>
         </div>
+        <span className="font-mono text-sm font-semibold text-[color:var(--color-text-muted)] tabular-nums">
+          {Math.round(percent)}%
+        </span>
       </div>
 
       <ProgressBar aria-label="シーケンス進行度" value={percent} className="w-full">
-        <ProgressBar.Output />
         <ProgressBar.Track>
           <ProgressBar.Fill />
         </ProgressBar.Track>

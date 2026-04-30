@@ -1,5 +1,5 @@
-import { AlertDialog, Button } from "@heroui/react";
-import { Check, ChevronRight, Hand, Play, RotateCcw } from "lucide-react";
+import { AlertDialog, Button, ScrollShadow } from "@heroui/react";
+import { Check, ChevronDown, Hand, Play } from "lucide-react";
 import { useState } from "react";
 
 import type { SequenceStepInfo } from "@/hooks/useRobotSocket";
@@ -35,6 +35,13 @@ const STEP_TONE_CLASS: Record<StepKind, string> = {
     "!bg-[color:var(--color-surface)] !text-[color:var(--color-text)] !border-[color:var(--color-border)]",
 };
 
+const ARROW_TONE_CLASS: Record<StepKind, string> = {
+  done: "text-[color:oklch(55%_0.16_150)]",
+  current: "text-[color:var(--color-accent)]",
+  waiting: "animate-pulse text-[color:var(--color-warning)]",
+  future: "text-[color:var(--color-border-strong)]",
+};
+
 export function SequenceStepList({
   steps,
   stepIndex,
@@ -46,7 +53,7 @@ export function SequenceStepList({
 
   if (steps.length === 0) {
     return (
-      <p className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-4 text-sm text-[color:var(--color-text-muted)]">
+      <p className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-3 text-xs text-[color:var(--color-text-muted)]">
         ステップ情報なし
       </p>
     );
@@ -68,70 +75,52 @@ export function SequenceStepList({
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex shrink-0 items-center justify-between">
+        <h3 className="text-[10px] font-bold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
           ステップ一覧
         </h3>
-        <span className="flex items-center gap-1 text-xs text-[color:var(--color-text-muted)]">
-          <RotateCcw size={12} />
-          クリックで任意の位置から再開
-        </span>
+        <span className="text-[10px] text-[color:var(--color-text-muted)]">クリックで再開</span>
       </div>
-      <div className="-mx-1 overflow-x-auto px-1 pb-2">
-        <ol className="flex items-stretch gap-2">
+
+      <ScrollShadow className="min-h-0 flex-1" hideScrollBar size={24}>
+        <ol className="flex flex-col">
           {steps.map((step, i) => {
             const kind = classifyStep(i, stepIndex, totalSteps, waitingTrigger);
-            const arrowHighlighted = waitingTrigger && i === stepIndex;
             return (
-              <li key={step.index} className="flex items-center gap-2">
+              <li key={step.index} className="flex flex-col">
                 <Button
                   variant="outline"
                   size="md"
                   onPress={() => handleRequestJump(i)}
                   aria-current={kind === "current" || kind === "waiting" ? "step" : undefined}
                   aria-label={`ステップ ${i + 1}: ${step.label}`}
-                  className={`relative !h-auto !min-h-[72px] !w-44 shrink-0 flex-col !items-start !justify-start gap-1 rounded-[12px] !px-3 !py-2.5 text-left ${STEP_TONE_CLASS[kind]}`}
+                  className={`!h-auto !min-h-[52px] !w-full justify-between gap-2 rounded-[10px] !px-3 !py-2 text-left ${STEP_TONE_CLASS[kind]}`}
                 >
-                  <span className="flex w-full items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase opacity-90">
-                    <span className="font-mono">#{i + 1}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="font-mono text-[11px] font-bold opacity-80">#{i + 1}</span>
                     {step.require_trigger ? (
-                      <span className="inline-flex items-center gap-0.5">
-                        <Hand size={11} strokeWidth={2.5} />
-                        <span>手動</span>
-                      </span>
+                      <Hand size={12} strokeWidth={2.5} className="shrink-0 opacity-80" />
                     ) : null}
-                  </span>
-                  <span className="line-clamp-2 w-full text-sm leading-tight font-semibold">
-                    {step.label}
-                  </span>
-                  {kind === "done" ? (
-                    <span className="absolute top-1.5 right-1.5 text-[color:oklch(55%_0.16_150)]">
-                      <Check size={14} strokeWidth={3} />
+                    <span className="truncate text-sm leading-tight font-semibold">
+                      {step.label}
                     </span>
-                  ) : null}
-                  {kind === "current" ? (
-                    <span className="absolute top-1.5 right-1.5 text-white/90">
-                      <Play size={12} strokeWidth={3} />
-                    </span>
-                  ) : null}
+                  </span>
+                  <span className="shrink-0">
+                    {kind === "done" ? <Check size={14} strokeWidth={3} /> : null}
+                    {kind === "current" ? <Play size={14} strokeWidth={3} /> : null}
+                  </span>
                 </Button>
                 {i < steps.length - 1 ? (
-                  <ChevronRight
-                    size={20}
-                    strokeWidth={3}
-                    className={
-                      arrowHighlighted
-                        ? "animate-pulse text-[color:var(--color-warning)]"
-                        : "text-[color:var(--color-border-strong)]"
-                    }
-                  />
+                  <div className="flex h-3 items-center justify-center">
+                    <ChevronDown size={14} strokeWidth={3} className={ARROW_TONE_CLASS[kind]} />
+                  </div>
                 ) : null}
               </li>
             );
           })}
         </ol>
-      </div>
+      </ScrollShadow>
 
       <AlertDialog.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>
         <AlertDialog.Container>

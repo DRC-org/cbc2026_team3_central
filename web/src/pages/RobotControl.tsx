@@ -2,6 +2,7 @@ import { AlertDialog, Button, Skeleton } from "@heroui/react";
 import { Play, Square } from "lucide-react";
 import { useState } from "react";
 
+import { HealthIndicator } from "@/components/HealthIndicator";
 import { MotorSummary } from "@/components/MotorSummary";
 import { SequenceProgress } from "@/components/SequenceProgress";
 import { SequenceStepList } from "@/components/SequenceStepList";
@@ -45,95 +46,10 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
   const inProgress = state && !state.waiting_trigger && !completed && !idleStopped;
   const showStop = Boolean(inProgress || state?.waiting_trigger);
 
-  return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 overflow-y-auto px-4 py-6 md:px-8 md:py-10">
-      {state ? (
-        <>
-          <section className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-[var(--shadow-card)] md:p-8">
-            <SequenceProgress
-              sequence={state.sequence}
-              currentStep={state.current_step}
-              stepIndex={state.step_index}
-              totalSteps={state.total_steps}
-              waitingTrigger={state.waiting_trigger}
-              large
-            />
-          </section>
-
-          <section className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 shadow-[var(--shadow-card)] md:p-6">
-            <SequenceStepList
-              steps={state.steps ?? []}
-              stepIndex={state.step_index}
-              waitingTrigger={state.waiting_trigger}
-              onJump={handleJump}
-            />
-          </section>
-
-          <div className="flex flex-col gap-3 md:flex-row md:items-stretch">
-            <div className="flex-1">
-              <TriggerButton
-                waiting={state.waiting_trigger}
-                stepIndex={state.step_index}
-                totalSteps={state.total_steps}
-                onTrigger={handleTrigger}
-              />
-            </div>
-            <div className="flex flex-col gap-3 md:w-48">
-              {showStop ? (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onPress={() => setStopConfirmOpen(true)}
-                  aria-label="シーケンスを通常停止"
-                  className="!min-h-[80px] flex-col rounded-[20px] !text-[color:var(--color-danger)] md:!min-h-full"
-                >
-                  <Square size={32} strokeWidth={2.4} />
-                  <span className="text-base font-bold">停止</span>
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onPress={handleStart}
-                  aria-label="シーケンスを先頭から開始"
-                  className="!min-h-[80px] flex-col rounded-[20px] !bg-[color:var(--color-accent-soft)] !text-[color:var(--color-accent)] md:!min-h-full"
-                >
-                  <Play size={32} strokeWidth={2.4} />
-                  <span className="text-base font-bold">開始</span>
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <MotorSummary motors={state.motors} />
-
-          <AlertDialog.Backdrop isOpen={stopConfirmOpen} onOpenChange={setStopConfirmOpen}>
-            <AlertDialog.Container>
-              <AlertDialog.Dialog className="sm:max-w-[420px]">
-                <AlertDialog.Header>
-                  <AlertDialog.Icon status="warning" />
-                  <AlertDialog.Heading>シーケンスを停止しますか？</AlertDialog.Heading>
-                </AlertDialog.Header>
-                <AlertDialog.Body>
-                  <p>緊急停止 (EMG STOP) ではなく、通常停止です。</p>
-                  <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-                    停止後はステップ #1 に戻り、待機状態になります。
-                  </p>
-                </AlertDialog.Body>
-                <AlertDialog.Footer>
-                  <Button slot="close" variant="tertiary">
-                    キャンセル
-                  </Button>
-                  <Button slot="close" variant="danger" onPress={handleConfirmStop}>
-                    停止
-                  </Button>
-                </AlertDialog.Footer>
-              </AlertDialog.Dialog>
-            </AlertDialog.Container>
-          </AlertDialog.Backdrop>
-        </>
-      ) : (
-        <div className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-8">
+  if (!state) {
+    return (
+      <main className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-6">
+        <div className="w-full max-w-md rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-8">
           <p className="mb-4 text-sm font-medium text-[color:var(--color-text-muted)]">
             {label} のデータ未受信
           </p>
@@ -143,7 +59,104 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
             <Skeleton className="h-3 w-full rounded" />
           </div>
         </div>
-      )}
+      </main>
+    );
+  }
+
+  return (
+    <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(280px,340px)_minmax(280px,340px)] gap-4 overflow-hidden p-4 lg:p-6">
+      {/* 左カラム: シーケンス概観 + コントロールバー */}
+      <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
+        <section className="shrink-0 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
+          <SequenceProgress
+            sequence={state.sequence}
+            currentStep={state.current_step}
+            stepIndex={state.step_index}
+            totalSteps={state.total_steps}
+            waitingTrigger={state.waiting_trigger}
+            large
+          />
+        </section>
+
+        <div className="flex-1" aria-hidden="true" />
+
+        <div className="grid shrink-0 grid-cols-[180px_1fr] gap-3">
+          {showStop ? (
+            <Button
+              variant="outline"
+              size="lg"
+              onPress={() => setStopConfirmOpen(true)}
+              aria-label="シーケンスを通常停止"
+              className="!h-full !min-h-[88px] flex-col gap-1 rounded-[16px] !text-[color:var(--color-danger)]"
+            >
+              <Square size={28} strokeWidth={2.4} />
+              <span className="text-base font-bold">停止</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="lg"
+              onPress={handleStart}
+              aria-label="シーケンスを先頭から開始"
+              className="!h-full !min-h-[88px] flex-col gap-1 rounded-[16px] !bg-[color:var(--color-accent-soft)] !text-[color:var(--color-accent)]"
+            >
+              <Play size={28} strokeWidth={2.4} />
+              <span className="text-base font-bold">開始</span>
+            </Button>
+          )}
+          <TriggerButton
+            waiting={state.waiting_trigger}
+            stepIndex={state.step_index}
+            totalSteps={state.total_steps}
+            onTrigger={handleTrigger}
+          />
+        </div>
+      </div>
+
+      {/* 中カラム: ステップ一覧 (縦スタック) */}
+      <section className="flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+        <SequenceStepList
+          steps={state.steps ?? []}
+          stepIndex={state.step_index}
+          waitingTrigger={state.waiting_trigger}
+          onJump={handleJump}
+        />
+      </section>
+
+      {/* 右カラム: CAN Bus + モータ */}
+      <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
+        <section className="shrink-0 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+          <HealthIndicator variant="bus-only" health={state.health} />
+        </section>
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+          <MotorSummary motors={state.motors} compact />
+        </section>
+      </div>
+
+      <AlertDialog.Backdrop isOpen={stopConfirmOpen} onOpenChange={setStopConfirmOpen}>
+        <AlertDialog.Container>
+          <AlertDialog.Dialog className="sm:max-w-[420px]">
+            <AlertDialog.Header>
+              <AlertDialog.Icon status="warning" />
+              <AlertDialog.Heading>シーケンスを停止しますか？</AlertDialog.Heading>
+            </AlertDialog.Header>
+            <AlertDialog.Body>
+              <p>緊急停止 (EMG STOP) ではなく、通常停止です。</p>
+              <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
+                停止後はステップ #1 に戻り、待機状態になります。
+              </p>
+            </AlertDialog.Body>
+            <AlertDialog.Footer>
+              <Button slot="close" variant="tertiary">
+                キャンセル
+              </Button>
+              <Button slot="close" variant="danger" onPress={handleConfirmStop}>
+                停止
+              </Button>
+            </AlertDialog.Footer>
+          </AlertDialog.Dialog>
+        </AlertDialog.Container>
+      </AlertDialog.Backdrop>
     </main>
   );
 }

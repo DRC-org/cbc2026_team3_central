@@ -117,3 +117,21 @@ body {
 .connection-dot-pulse {
   animation: connection-dot 1.6s ease-in-out infinite;
 }
+
+@keyframes trigger-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 4px oklch(55% 0.22 295 / 0.45),
+      0 0 24px 8px oklch(55% 0.22 295 / 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px oklch(55% 0.22 295 / 0.55),
+      0 0 32px 12px oklch(55% 0.22 295 / 0.45);
+  }
+}
+
+.trigger-glow {
+  animation: trigger-glow 1.6s ease-in-out infinite;
+}

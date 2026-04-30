@@ -12,7 +12,7 @@ import type {
 
 interface HealthIndicatorProps {
   health: HealthSnapshot | undefined;
-  variant?: "pill" | "card" | "compact";
+  variant?: "pill" | "card" | "compact" | "bus-only";
 }
 
 type Tone = "success" | "warning" | "danger" | "neutral";
@@ -175,6 +175,34 @@ function MotorRow({ motor }: { motor: MotorHealth }) {
   );
 }
 
+function BusOnlyMode({ health }: { health: HealthSnapshot }) {
+  const style = TONE_STYLES[busTone(health.overall)];
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-bold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
+          CAN BUS
+        </h3>
+        <Chip color={style.chipColor} variant="soft" size="sm">
+          <style.icon size={11} strokeWidth={2.5} />
+          <Chip.Label>{style.label}</Chip.Label>
+        </Chip>
+      </div>
+      {health.buses.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          {health.buses.map((bus) => (
+            <BusRow key={bus.name} bus={bus} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-[10px] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-2 text-center text-[10px] text-[color:var(--color-text-muted)]">
+          バス情報なし
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CardMode({ health }: { health: HealthSnapshot }) {
   const style = TONE_STYLES[busTone(health.overall)];
   return (
@@ -236,6 +264,13 @@ function NeutralPlaceholder({
       </Chip>
     );
   }
+  if (variant === "bus-only") {
+    return (
+      <div className="rounded-[10px] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-2 text-center text-[10px] text-[color:var(--color-text-muted)]">
+        CAN ヘルス未取得
+      </div>
+    );
+  }
   if (variant === "compact") {
     return (
       <Chip color={style.chipColor} variant="soft" size="md">
@@ -258,5 +293,6 @@ export function HealthIndicator({ health, variant = "compact" }: HealthIndicator
   if (!health) return <NeutralPlaceholder variant={variant} />;
   if (variant === "pill") return <PillMode health={health} />;
   if (variant === "compact") return <CompactMode health={health} />;
+  if (variant === "bus-only") return <BusOnlyMode health={health} />;
   return <CardMode health={health} />;
 }

@@ -1,4 +1,4 @@
-import { Button, Disclosure } from "@heroui/react";
+import { Button, Chip, Disclosure, ScrollShadow } from "@heroui/react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 
@@ -7,6 +7,7 @@ import type { MotorState } from "@/hooks/useRobotSocket";
 
 interface MotorSummaryProps {
   motors: Record<string, MotorState>;
+  compact?: boolean;
 }
 
 const TEMP_WARNING = 60;
@@ -15,14 +16,14 @@ function countAnomalies(motors: Record<string, MotorState>): number {
   return Object.values(motors).filter((m) => m.temp >= TEMP_WARNING).length;
 }
 
-export function MotorSummary({ motors }: MotorSummaryProps) {
+export function MotorSummary({ motors, compact = false }: MotorSummaryProps) {
   const [expanded, setExpanded] = useState(false);
   const total = Object.keys(motors).length;
   const anomalyCount = countAnomalies(motors);
 
   if (total === 0) {
     return (
-      <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-4 text-sm text-[color:var(--color-text-muted)]">
+      <div className="rounded-[10px] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-3 text-xs text-[color:var(--color-text-muted)]">
         モータ情報なし
       </div>
     );
@@ -30,12 +31,41 @@ export function MotorSummary({ motors }: MotorSummaryProps) {
 
   const hasAnomaly = anomalyCount > 0;
 
+  if (compact) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <div className="flex shrink-0 items-center justify-between">
+          <h3 className="text-[10px] font-bold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
+            モータ
+          </h3>
+          <Chip color={hasAnomaly ? "warning" : "success"} variant="soft" size="sm">
+            {hasAnomaly ? (
+              <AlertTriangle size={11} strokeWidth={2.5} />
+            ) : (
+              <CheckCircle2 size={11} strokeWidth={2.5} />
+            )}
+            <Chip.Label>
+              {hasAnomaly ? `異常 ${anomalyCount} 件` : `全 ${total} 台 正常`}
+            </Chip.Label>
+          </Chip>
+        </div>
+        <ScrollShadow className="min-h-0 flex-1" hideScrollBar size={20}>
+          <div className="flex flex-col gap-1.5">
+            {Object.entries(motors).map(([name, state]) => (
+              <MotorStatus key={name} name={name} state={state} compact />
+            ))}
+          </div>
+        </ScrollShadow>
+      </div>
+    );
+  }
+
   return (
     <Disclosure isExpanded={expanded} onExpandedChange={setExpanded}>
       <Disclosure.Heading>
         <Button
           slot="trigger"
-          variant={hasAnomaly ? "outline" : "outline"}
+          variant="outline"
           fullWidth
           className={`!h-auto justify-between rounded-[var(--radius-card)] px-4 py-3 ${
             hasAnomaly

@@ -18,9 +18,9 @@ export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: Tri
         fullWidth
         size="lg"
         variant="secondary"
-        className="min-h-[200px] rounded-[20px] text-3xl font-black tracking-wide"
+        className="!h-full !min-h-[88px] gap-3 rounded-[16px] !text-2xl !font-black tracking-wide"
       >
-        <CheckCircle2 size={48} strokeWidth={2.5} />
+        <CheckCircle2 size={36} strokeWidth={2.5} />
         完了
       </Button>
     );
@@ -34,10 +34,10 @@ export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: Tri
         variant="primary"
         onPress={onTrigger}
         aria-label="次のステップへ進む"
-        className="min-h-[220px] rounded-[20px] text-3xl font-black tracking-wide"
+        className="trigger-glow !h-full !min-h-[88px] gap-3 rounded-[16px] !text-3xl !font-black tracking-wide"
       >
-        <span className="text-5xl">次へ進む</span>
-        <ChevronRight size={56} strokeWidth={2.5} />
+        <span>次へ進む</span>
+        <ChevronRight size={40} strokeWidth={2.6} />
       </Button>
     );
   }
@@ -48,7 +48,7 @@ export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: Tri
       fullWidth
       size="lg"
       variant="secondary"
-      className="min-h-[200px] rounded-[20px] text-3xl font-black tracking-wide"
+      className="!h-full !min-h-[88px] gap-3 rounded-[16px] !text-2xl !font-black tracking-wide"
     >
       <Spinner size="md" color="current" />
       実行中
