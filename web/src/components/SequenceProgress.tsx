@@ -55,8 +55,14 @@ export function SequenceProgress({
   waitingTrigger,
   large = false,
 }: SequenceProgressProps) {
-  const percent = totalSteps > 0 ? ((stepIndex + 1) / totalSteps) * 100 : 0;
-  const isComplete = totalSteps > 0 && stepIndex + 1 >= totalSteps && !waitingTrigger;
+  // バックエンドは完走時に step_index = total_steps を返すため、
+  // 表示用には total を超えないようクランプし、% も 0..100 に収める
+  const isComplete = totalSteps > 0 && stepIndex >= totalSteps && !waitingTrigger;
+  const displayIndex = totalSteps > 0 ? Math.min(stepIndex + 1, totalSteps) : 0;
+  const percent =
+    totalSteps > 0
+      ? Math.min(100, ((isComplete ? totalSteps : stepIndex + 1) / totalSteps) * 100)
+      : 0;
   const statusKey: StatusKey =
     totalSteps === 0 ? "idle" : isComplete ? "complete" : waitingTrigger ? "waiting" : "running";
   const status = STATUS[statusKey];
@@ -88,7 +94,7 @@ export function SequenceProgress({
               large ? "text-4xl" : "text-3xl"
             }`}
           >
-            {totalSteps > 0 ? stepIndex + 1 : 0}
+            {displayIndex}
           </span>
           <span className="text-lg font-medium text-[color:var(--color-text-subtle)]">
             / {totalSteps}

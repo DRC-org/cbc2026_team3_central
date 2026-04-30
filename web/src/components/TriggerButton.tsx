@@ -9,7 +9,9 @@ interface TriggerButtonProps {
 }
 
 export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: TriggerButtonProps) {
-  const isComplete = totalSteps > 0 && stepIndex + 1 >= totalSteps && !waiting;
+  // バックエンドは完走時 step_index = total_steps を返す。「最終ステップ実行中」と
+  // 「全完走」を分けるため、>= total での判定を採用する
+  const isComplete = totalSteps > 0 && stepIndex >= totalSteps && !waiting;
 
   if (isComplete) {
     return (
