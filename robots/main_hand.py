@@ -25,6 +25,12 @@ class MainHandSequence(Sequence):
         # TODO: lift_motor.set_position(0) / arm_joint.set_position(0)
         await asyncio.sleep(0.5)
 
+    @step("自陣ワーク 3 列目まで前進", require_trigger=True)
+    async def move_to_work_3(self) -> None:
+        logger.info("[main_hand] 自陣ワーク 3 列目まで前進")
+        # TODO: lift_motor.set_position(LIFT_WORK_3)
+        await asyncio.sleep(0.5)
+
     @step("ワーク前まで前進", require_trigger=True)
     async def approach_work(self) -> None:
         logger.info("[main_hand] ワーク前まで前進")

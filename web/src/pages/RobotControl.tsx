@@ -49,10 +49,8 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
   if (!state) {
     return (
       <main className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-6">
-        <div className="w-full max-w-md rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-8">
-          <p className="mb-4 text-sm font-medium text-[color:var(--color-text-muted)]">
-            {label} のデータ未受信
-          </p>
+        <div className="w-full max-w-md rounded-(--radius-card) border border-border bg-(--color-surface) p-8">
+          <p className="mb-4 text-sm font-medium text-text-muted">{label} のデータ未受信</p>
           <div className="space-y-3">
             <Skeleton className="h-7 w-3/4 rounded" />
             <Skeleton className="h-12 w-1/2 rounded" />
@@ -67,7 +65,7 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
     <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(280px,340px)_minmax(280px,340px)] gap-4 overflow-hidden p-4 lg:p-6">
       {/* 左カラム: シーケンス概観 + コントロールバー */}
       <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
-        <section className="shrink-0 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
+        <section className="shrink-0 rounded-(--radius-card) border border-border bg-(--color-surface) p-5 shadow-(--shadow-card)">
           <SequenceProgress
             sequence={state.sequence}
             currentStep={state.current_step}
@@ -87,7 +85,7 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
               size="lg"
               onPress={() => setStopConfirmOpen(true)}
               aria-label="シーケンスを通常停止"
-              className="!h-full !min-h-[88px] flex-col gap-1 rounded-[16px] !text-[color:var(--color-danger)]"
+              className="h-full! min-h-22! flex-col gap-1 rounded-[16px] text-danger!"
             >
               <Square size={28} strokeWidth={2.4} />
               <span className="text-base font-bold">停止</span>
@@ -98,7 +96,7 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
               size="lg"
               onPress={handleStart}
               aria-label="シーケンスを先頭から開始"
-              className="!h-full !min-h-[88px] flex-col gap-1 rounded-[16px] !bg-[color:var(--color-accent-soft)] !text-[color:var(--color-accent)]"
+              className="h-full! min-h-22! flex-col gap-1 rounded-[16px] bg-accent-soft! text-accent!"
             >
               <Play size={28} strokeWidth={2.4} />
               <span className="text-base font-bold">開始</span>
@@ -114,7 +112,7 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
       </div>
 
       {/* 中カラム: ステップ一覧 (縦スタック) */}
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+      <section className="flex min-h-0 flex-col overflow-hidden rounded-(--radius-card) border border-border bg-(--color-surface) p-4 shadow-(--shadow-card)">
         <SequenceStepList
           steps={state.steps ?? []}
           stepIndex={state.step_index}
@@ -125,24 +123,24 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
 
       {/* 右カラム: CAN Bus + モータ */}
       <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
-        <section className="shrink-0 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+        <section className="shrink-0 rounded-(--radius-card) border border-border bg-(--color-surface) p-4 shadow-(--shadow-card)">
           <HealthIndicator variant="bus-only" health={state.health} />
         </section>
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-border bg-(--color-surface) p-4 shadow-(--shadow-card)">
           <MotorSummary motors={state.motors} compact />
         </section>
       </div>
 
       <AlertDialog.Backdrop isOpen={stopConfirmOpen} onOpenChange={setStopConfirmOpen}>
         <AlertDialog.Container>
-          <AlertDialog.Dialog className="sm:max-w-[420px]">
+          <AlertDialog.Dialog className="sm:max-w-105">
             <AlertDialog.Header>
               <AlertDialog.Icon status="warning" />
               <AlertDialog.Heading>シーケンスを停止しますか？</AlertDialog.Heading>
             </AlertDialog.Header>
             <AlertDialog.Body>
               <p>緊急停止 (EMG STOP) ではなく、通常停止です。</p>
-              <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
+              <p className="mt-2 text-sm text-text-muted">
                 停止後はステップ #1 に戻り、待機状態になります。
               </p>
             </AlertDialog.Body>

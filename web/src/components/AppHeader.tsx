@@ -83,7 +83,7 @@ export function AppHeader({ title, connected, onEStop }: AppHeaderProps) {
           size="md"
           aria-label={isFullscreen ? "全画面解除" : "全画面表示"}
           onPress={toggleFullscreen}
-          className="hidden md:!flex"
+          className="hidden md:flex!"
         >
           {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </Button>
