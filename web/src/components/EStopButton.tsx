@@ -1,23 +1,16 @@
-import { Button } from "@heroui/react";
-import { AlertTriangle } from "lucide-react";
+import { TuiButton } from "@/components/tui";
 
 interface EStopButtonProps {
   onStop: () => void;
 }
 
+// 非常停止トリガ。黄黒のストライプ枠で危険操作を強調しつつ TUI ボタンで発火する。
 export function EStopButton({ onStop }: EStopButtonProps) {
   return (
-    <div className="e-stop-stripe flex shrink-0 items-center justify-center rounded-[10px] p-[3px]">
-      <Button
-        variant="danger"
-        size="md"
-        onPress={onStop}
-        aria-label="緊急停止"
-        className="rounded-[7px] font-black tracking-wider"
-      >
-        <AlertTriangle size={20} strokeWidth={2.5} />
-        EMG STOP
-      </Button>
-    </div>
+    <span className="e-stop-stripe inline-flex shrink-0 items-center p-[3px]">
+      <TuiButton variant="danger" flat onPress={onStop} className="font-bold tracking-wider">
+        {"[ ⚠ EMG STOP ]"}
+      </TuiButton>
+    </span>
   );
 }

@@ -1,7 +1,6 @@
-import { Button, Modal, Spinner, Tooltip } from "@heroui/react";
-import { Activity, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
+import { TuiButton, TuiModal } from "@/components/tui";
 import { useRobot } from "@/context/RobotContext";
 import { useMotorCheck } from "@/hooks/useMotorCheck";
 
@@ -29,12 +28,12 @@ export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonPro
   const reasonLabel = !connected
     ? "切断中のため不可"
     : eStopActive
-      ? "緊急停止中は実行できません"
+      ? "緊急停止中は不可"
       : sequenceRunning
-        ? "シーケンス実行中は実行できません"
+        ? "シーケンス実行中は不可"
         : checkRunning
           ? "動作確認 実行中"
-          : "全モータの応答を順番に確認します";
+          : null;
 
   const handleConfirmStart = () => {
     start();
@@ -43,72 +42,46 @@ export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonPro
   };
 
   return (
-    <>
-      <Tooltip>
-        <Tooltip.Trigger>
-          <Button
-            variant="outline"
-            size="md"
-            isDisabled={disabled}
-            onPress={() => setConfirmOpen(true)}
-            aria-label={`${robotName} の動作確認を開始`}
-          >
-            {checkRunning ? (
-              <>
-                <Spinner size="sm" />
-                <span className="text-sm font-semibold">実行中...</span>
-              </>
-            ) : (
-              <>
-                <Activity size={16} strokeWidth={2.5} />
-                <span className="text-sm font-semibold">動作確認</span>
-              </>
-            )}
-          </Button>
-        </Tooltip.Trigger>
-        <Tooltip.Content>{reasonLabel}</Tooltip.Content>
-      </Tooltip>
+    <div className="flex items-center gap-2">
+      <TuiButton
+        variant="info"
+        flat
+        isDisabled={disabled}
+        onPress={() => setConfirmOpen(true)}
+        aria-label={`${robotName} の動作確認を開始`}
+      >
+        {checkRunning ? "► 確認実行中..." : "▮ 動作確認"}
+      </TuiButton>
+      {/* Tooltip は使えないため無効化理由を等幅テキストで併記する。 */}
+      {disabled && reasonLabel ? (
+        <span className="text-xs opacity-70">[?] {reasonLabel}</span>
+      ) : null}
 
-      <Modal>
-        <Modal.Backdrop isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
-          <Modal.Container placement="center" size="sm">
-            <Modal.Dialog className="bg-[color:var(--color-surface)]">
-              <Modal.Header className="border-b border-[color:var(--color-border)]">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--color-warning-soft)] text-[color:oklch(45%_0.16_70)]">
-                    <AlertTriangle size={20} strokeWidth={2.5} />
-                  </span>
-                  <Modal.Heading className="text-lg font-bold text-[color:var(--color-text)]">
-                    アクチュエータ動作確認
-                  </Modal.Heading>
-                </div>
-              </Modal.Header>
-              <Modal.Body className="p-5">
-                <p className="text-sm text-[color:var(--color-text)]">
-                  <span className="font-semibold">{robotName}</span>{" "}
-                  の全モータを順番に微小駆動します。
-                </p>
-                <p className="mt-2 text-sm font-semibold text-[color:var(--color-danger)]">
-                  周囲の安全を確認してから開始してください。
-                </p>
-                <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">
-                  実行中も緊急停止ボタンは即時優先で動作します。
-                </p>
-              </Modal.Body>
-              <Modal.Footer className="border-t border-[color:var(--color-border)]">
-                <div className="flex w-full justify-end gap-2">
-                  <Button slot="close" variant="ghost">
-                    キャンセル
-                  </Button>
-                  <Button variant="primary" onPress={handleConfirmStart}>
-                    開始
-                  </Button>
-                </div>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-    </>
+      <TuiModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="ACTUATOR CHECK"
+        footer={
+          <div className="flex justify-end gap-2">
+            <TuiButton variant="secondary" flat onPress={() => setConfirmOpen(false)}>
+              キャンセル
+            </TuiButton>
+            <TuiButton variant="info" flat onPress={handleConfirmStart}>
+              開始
+            </TuiButton>
+          </div>
+        }
+      >
+        <p className="font-bold">
+          <span className="info-text">{robotName}</span> の全モータを順番に微小駆動します。
+        </p>
+        <p className="mt-2 text-sm danger-text font-bold">
+          ⚠ 周囲の安全を確認してから開始してください。
+        </p>
+        <p className="mt-1 text-sm opacity-80">
+          実行中も緊急停止 (EMG STOP) は即時優先で動作します。
+        </p>
+      </TuiModal>
+    </div>
   );
 }

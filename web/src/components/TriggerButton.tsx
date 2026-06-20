@@ -1,5 +1,5 @@
-import { Button, Spinner } from "@heroui/react";
-import { CheckCircle2, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Color, TuiButton } from "react-tuicss";
 
 interface TriggerButtonProps {
   waiting: boolean;
@@ -8,52 +8,70 @@ interface TriggerButtonProps {
   onTrigger: () => void;
 }
 
-export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: TriggerButtonProps) {
+// 実行中表示用の ASCII 回転記号。lucide スピナー撤去の代替（CSS keyframe 不要）。
+const SPINNER_FRAMES = ["|", "/", "-", "\\"];
+
+function useAsciiSpinner(active: boolean): string {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(
+      () => setFrame((f) => (f + 1) % SPINNER_FRAMES.length),
+      120,
+    );
+    return () => clearInterval(id);
+  }, [active]);
+  return SPINNER_FRAMES[frame];
+}
+
+export function TriggerButton({
+  waiting,
+  stepIndex,
+  totalSteps,
+  onTrigger,
+}: TriggerButtonProps) {
   // バックエンドは完走時 step_index = total_steps を返す。「最終ステップ実行中」と
   // 「全完走」を分けるため、>= total での判定を採用する
   const isComplete = totalSteps > 0 && stepIndex >= totalSteps && !waiting;
+  const spinner = useAsciiSpinner(!waiting && !isComplete);
 
   if (isComplete) {
     return (
-      <Button
-        isDisabled
-        fullWidth
-        size="lg"
-        variant="secondary"
-        className="!h-full !min-h-[88px] gap-3 rounded-[16px] !text-2xl !font-black tracking-wide"
+      <TuiButton
+        disabled
+        color={Color.Green}
+        className="flex h-full w-full items-center justify-center gap-3 text-2xl font-black tracking-wide"
+        aria-label="シーケンス完走"
       >
-        <CheckCircle2 size={36} strokeWidth={2.5} />
-        完了
-      </Button>
+        ✓ DONE
+      </TuiButton>
     );
   }
 
   if (waiting) {
     return (
-      <Button
-        fullWidth
-        size="lg"
+      <TuiButton
         variant="primary"
+        flat
         onPress={onTrigger}
         aria-label="次のステップへ進む"
-        className="trigger-glow !h-full !min-h-[88px] gap-3 rounded-[16px] !text-3xl !font-black tracking-wide"
+        className="trigger-glow flex h-full w-full items-center justify-center gap-3 text-3xl font-black tracking-wide"
       >
-        <span>次へ進む</span>
-        <ChevronRight size={40} strokeWidth={2.6} />
-      </Button>
+        ► NEXT
+      </TuiButton>
     );
   }
 
   return (
-    <Button
+    <TuiButton
       isDisabled
-      fullWidth
-      size="lg"
-      variant="secondary"
-      className="!h-full !min-h-[88px] gap-3 rounded-[16px] !text-2xl !font-black tracking-wide"
+      variant="info"
+      flat
+      className="flex h-full w-full items-center justify-center gap-3 text-2xl font-black tracking-wide"
+      aria-label="シーケンス実行中"
     >
-      <Spinner size="md" color="current" />
-      実行中
-    </Button>
+      <span className="tabular-nums">[{spinner}]</span>
+      RUNNING
+    </TuiButton>
   );
 }

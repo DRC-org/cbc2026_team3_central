@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import can
 
@@ -168,6 +169,160 @@ class TestMotorCheckRunnerHappyPath:
         assert all(r.result is MotorCheckResult.PASSED for r in snap.records)
         assert len(snap.records) == 3
 
+    async def test_prepare_messages_are_sent_before_check_command(self) -> None:
+        class _PreparingMotor(_MockMotor):
+            def prepare_check(self) -> list[can.Message]:
+                return [
+                    can.Message(arbitration_id=0x201, data=bytes(8)),
+                    can.Message(arbitration_id=0x202, data=bytes(8)),
+                ]
+
+        motors = {"m1": _PreparingMotor("m1")}
+        manager = _MockCANManager(motors)
+
+        async def hook(motor_name: str, _msg: can.Message) -> None:
+            manager.set_rx_at(motor_name, time.time() + 0.001)
+
+        manager.set_post_send_hook(hook)
+        runner = MotorCheckRunner(
+            "main_hand", manager, motors, default_magnitude={"_PreparingMotor": 1.0}
+        )
+
+        snap = await runner.run()
+
+        assert snap.records[0].result is MotorCheckResult.PASSED
+        assert [msg.arbitration_id for _, msg in manager.sent] == [0x201, 0x202, 0x100, 0x100]
+
+    async def test_prepare_steps_observe_declared_delays(self) -> None:
+        class _DelayedMotor(_MockMotor):
+            def prepare_check_steps(self) -> list[tuple[can.Message, float]]:
+                return [
+                    (can.Message(arbitration_id=0x201, data=bytes(8)), 0.05),
+                    (can.Message(arbitration_id=0x202, data=bytes(8)), 0.2),
+                ]
+
+        motors = {"m1": _DelayedMotor("m1")}
+        manager = _MockCANManager(motors)
+
+        async def hook(motor_name: str, _msg: can.Message) -> None:
+            manager.set_rx_at(motor_name, time.time() + 0.001)
+
+        manager.set_post_send_hook(hook)
+        runner = MotorCheckRunner(
+            "main_hand", manager, motors, default_magnitude={"_DelayedMotor": 1.0}
+        )
+        with patch.object(
+            runner, "_wait_step_delay", new_callable=AsyncMock, return_value=True
+        ) as wait_delay:
+            snap = await runner.run()
+
+        assert snap.records[0].result is MotorCheckResult.PASSED
+        assert [call.args[0] for call in wait_delay.await_args_list] == [0.05, 0.2]
+
+    async def test_known_safety_error_rejects_check_before_preparation(self) -> None:
+        class _UnsafeMotor(_MockMotor):
+            def check_safety_error(self) -> str | None:
+                return "既知fault"
+
+            def prepare_check(self) -> list[can.Message]:
+                raise AssertionError("prepare_check must not run")
+
+        motors = {"m1": _UnsafeMotor("m1")}
+        manager = _MockCANManager(motors)
+        runner = MotorCheckRunner(
+            "main_hand", manager, motors, default_magnitude={"_UnsafeMotor": 1.0}
+        )
+
+        snap = await runner.run()
+
+        assert snap.records[0].result is MotorCheckResult.FAILED
+        assert snap.records[0].detail == "既知fault"
+        assert [msg.arbitration_id for _, msg in manager.sent] == [0x100]
+
+    async def test_missing_or_stale_required_feedback_rejects_check(self) -> None:
+        class _FeedbackRequiredMotor(_MockMotor):
+            def requires_fresh_feedback_for_check(self) -> bool:
+                return True
+
+        for last_rx_at, expected in [(None, "未受信"), (99.0, "STALE")]:
+            motors = {"m1": _FeedbackRequiredMotor("m1")}
+            manager = _MockCANManager(motors)
+            if last_rx_at is not None:
+                manager.set_rx_at("m1", last_rx_at)
+            runner = MotorCheckRunner(
+                "main_hand",
+                manager,
+                motors,
+                feedback_freshness_ms=500.0,
+                default_magnitude={"_FeedbackRequiredMotor": 1.0},
+            )
+
+            with patch("lib.motor_check.time.time", return_value=100.0):
+                snap = await runner.run()
+
+            assert snap.records[0].result is MotorCheckResult.FAILED
+            assert expected in snap.records[0].detail
+            assert len(manager.sent) == 1
+
+    async def test_feedback_is_rechecked_during_preparation(self) -> None:
+        class _FeedbackRequiredMotor(_MockMotor):
+            def requires_fresh_feedback_for_check(self) -> bool:
+                return True
+
+            def prepare_check_steps(self) -> list[tuple[can.Message, float]]:
+                return [
+                    (can.Message(arbitration_id=0x201, data=bytes(8)), 0.0),
+                    (can.Message(arbitration_id=0x202, data=bytes(8)), 0.0),
+                ]
+
+        motors = {"m1": _FeedbackRequiredMotor("m1")}
+        manager = _MockCANManager(motors)
+        manager.set_rx_at("m1", 100.0)
+
+        async def hook(_motor_name: str, msg: can.Message) -> None:
+            if msg.arbitration_id == 0x201:
+                manager.set_rx_at("m1", 99.0)
+
+        manager.set_post_send_hook(hook)
+        runner = MotorCheckRunner(
+            "main_hand",
+            manager,
+            motors,
+            feedback_freshness_ms=500.0,
+            default_magnitude={"_FeedbackRequiredMotor": 1.0},
+        )
+
+        with patch("lib.motor_check.time.time", return_value=100.0):
+            snap = await runner.run()
+
+        assert snap.records[0].result is MotorCheckResult.FAILED
+        assert "STALE" in snap.records[0].detail
+        assert [msg.arbitration_id for _, msg in manager.sent] == [0x201, 0x100]
+
+    async def test_abort_during_preparation_stops_steps_and_disables(self) -> None:
+        class _PreparingMotor(_MockMotor):
+            def prepare_check_steps(self) -> list[tuple[can.Message, float]]:
+                return [
+                    (can.Message(arbitration_id=0x201, data=bytes(8)), 0.1),
+                    (can.Message(arbitration_id=0x202, data=bytes(8)), 0.1),
+                ]
+
+        motors = {"m1": _PreparingMotor("m1")}
+        manager = _MockCANManager(motors)
+        runner = MotorCheckRunner(
+            "main_hand", manager, motors, default_magnitude={"_PreparingMotor": 1.0}
+        )
+
+        async def hook(_motor_name: str, msg: can.Message) -> None:
+            if msg.arbitration_id == 0x201:
+                runner.abort()
+
+        manager.set_post_send_hook(hook)
+        snap = await runner.run()
+
+        assert snap.records[0].result is MotorCheckResult.SKIPPED
+        assert [msg.arbitration_id for _, msg in manager.sent] == [0x201, 0x100]
+
     async def test_partial_failed_overall_partial(self) -> None:
         motors = {
             "m1": _MockMotor("m1", evaluate_passed=True),
@@ -238,7 +393,7 @@ class TestMotorCheckRunnerAbort:
         manager = _MockCANManager(motors)
 
         async def hook(motor_name: str, _msg: can.Message) -> None:
-            # 1 つ目の send 完了直後に abort、ただしフィードバックは更新する
+            # 1 つ目の指令送信直後に abort。現在モータも即時停止扱いになる。
             manager.set_rx_at(motor_name, time.time() + 0.001)
             if motor_name == "m1":
                 runner.abort()
@@ -253,8 +408,8 @@ class TestMotorCheckRunnerAbort:
         manager.set_post_send_hook(hook)
 
         snap = await runner.run()
-        assert snap.records[0].result is MotorCheckResult.PASSED
-        # 残りは SKIPPED で完結する
+        assert snap.records[0].result is MotorCheckResult.SKIPPED
+        # 残りも SKIPPED で完結する
         assert snap.records[1].result is MotorCheckResult.SKIPPED
         assert snap.records[2].result is MotorCheckResult.SKIPPED
 

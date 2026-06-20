@@ -253,12 +253,36 @@ class RobotServer:
         elif cmd_type == "e_stop":
             logger.warning("緊急停止コマンド受信")
             self._e_stop_active = True
+            for runner in self._motor_check_runners.values():
+                if runner.is_running:
+                    runner.abort()
             e_stop_msg = GenericDriver.encode_e_stop()
-            for name, ctx in self._robots.items():
-                for bus_name in ctx.can_manager._buses:
-                    await ctx.can_manager.send_to_bus(bus_name, e_stop_msg)
-                logger.info("E-STOP 送信: %s", name)
-            await self._broadcast_e_stop_state()
+            try:
+                for name, ctx in self._robots.items():
+                    for motor_name, motor in ctx.can_manager._motors.items():
+                        driver_stop = motor.emergency_stop_message()
+                        if driver_stop is None:
+                            continue
+                        try:
+                            await ctx.can_manager.send(motor_name, driver_stop)
+                        except Exception:
+                            logger.exception(
+                                "E-STOP driver固有送信失敗: robot=%s motor=%s",
+                                name,
+                                motor_name,
+                            )
+                    for bus_name in ctx.can_manager._buses:
+                        try:
+                            await ctx.can_manager.send_to_bus(bus_name, e_stop_msg)
+                        except Exception:
+                            logger.exception(
+                                "E-STOP bus送信失敗: robot=%s bus=%s",
+                                name,
+                                bus_name,
+                            )
+                    logger.info("E-STOP 送信試行完了: %s", name)
+            finally:
+                await self._broadcast_e_stop_state()
 
         elif cmd_type == "e_stop_release":
             logger.info("緊急停止解除コマンド受信")
@@ -387,6 +411,7 @@ class RobotServer:
             can_manager=ctx.can_manager,
             motors=motors,
             per_motor_timeout_ms=float(self._motor_check_settings["per_motor_timeout_ms"]),
+            feedback_freshness_ms=float(self._health_thresholds["feedback_timeout_ms"]),
             default_magnitude=self._motor_check_settings["default_magnitude"],  # type: ignore[arg-type]
             per_motor_overrides=self._motor_check_settings["per_motor_overrides"],  # type: ignore[arg-type]
         )

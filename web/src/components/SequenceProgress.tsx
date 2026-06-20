@@ -1,5 +1,4 @@
-import { Chip, ProgressBar } from "@heroui/react";
-import { CheckCircle2, type LucideIcon, Play, Timer } from "lucide-react";
+import { TuiProgress, cx, type TuiColor } from "@/components/tui";
 
 interface SequenceProgressProps {
   sequence: string;
@@ -12,39 +11,12 @@ interface SequenceProgressProps {
 
 type StatusKey = "complete" | "waiting" | "running" | "idle";
 
-const STATUS: Record<
-  StatusKey,
-  {
-    label: string;
-    icon: LucideIcon;
-    chipColor: "success" | "warning" | "accent" | "default";
-    tone: string;
-  }
-> = {
-  complete: {
-    label: "完了",
-    icon: CheckCircle2,
-    chipColor: "success",
-    tone: "text-[color:oklch(35%_0.16_150)]",
-  },
-  waiting: {
-    label: "許可待ち",
-    icon: Timer,
-    chipColor: "warning",
-    tone: "text-[color:oklch(45%_0.16_70)]",
-  },
-  running: {
-    label: "実行中",
-    icon: Play,
-    chipColor: "accent",
-    tone: "text-[color:var(--color-accent)]",
-  },
-  idle: {
-    label: "未開始",
-    icon: Timer,
-    chipColor: "default",
-    tone: "text-[color:var(--color-text-muted)]",
-  },
+// TUI 記号 + セマンティック色でステータスを表現する。
+const STATUS: Record<StatusKey, { label: string; symbol: string; color: TuiColor }> = {
+  complete: { label: "完了", symbol: "✓", color: "success" },
+  waiting: { label: "許可待ち", symbol: "▮", color: "warning" },
+  running: { label: "実行中", symbol: "►", color: "info" },
+  idle: { label: "未開始", symbol: "○", color: "secondary" },
 };
 
 export function SequenceProgress({
@@ -66,56 +38,43 @@ export function SequenceProgress({
   const statusKey: StatusKey =
     totalSteps === 0 ? "idle" : isComplete ? "complete" : waitingTrigger ? "waiting" : "running";
   const status = STATUS[statusKey];
-  const StatusIcon = status.icon;
 
   return (
-    <section className="flex flex-col gap-2.5">
+    <section className="tui-col" style={{ gap: 8 }}>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-[10px] font-semibold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
-            シーケンス
-          </span>
-          <span
-            className={`truncate font-bold text-[color:var(--color-text)] ${large ? "text-base" : "text-sm"}`}
-          >
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="text-xs opacity-70">SEQ</span>
+          <span className={cx("truncate font-bold", large ? "text-base" : "text-sm")}>
             {sequence}
           </span>
         </div>
-        <Chip color={status.chipColor} variant="soft" size="sm">
-          <StatusIcon size={12} strokeWidth={2.5} />
-          <Chip.Label>{status.label}</Chip.Label>
-        </Chip>
+        <span className={cx("shrink-0 whitespace-nowrap font-bold", `${status.color}-text`)}>
+          [{status.symbol} {status.label}]
+        </span>
       </div>
 
       <div className="flex items-end justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span
-            className={`font-mono font-extrabold text-[color:var(--color-text)] tabular-nums ${
-              large ? "text-4xl" : "text-3xl"
-            }`}
-          >
+          <span className={cx("font-bold tabular-nums", large ? "text-4xl" : "text-3xl")}>
             {displayIndex}
           </span>
-          <span className="text-lg font-medium text-[color:var(--color-text-subtle)]">
-            / {totalSteps}
-          </span>
+          <span className="text-lg opacity-70">/ {totalSteps}</span>
           <span
-            className={`ml-1 truncate font-semibold ${status.tone} ${large ? "text-base" : "text-sm"}`}
+            className={cx("ml-1 truncate font-semibold", large ? "text-base" : "text-sm")}
             title={currentStep ?? undefined}
           >
-            {currentStep ?? "—"}
+            {currentStep ? `› ${currentStep}` : "—"}
           </span>
         </div>
-        <span className="font-mono text-sm font-semibold text-[color:var(--color-text-muted)] tabular-nums">
-          {Math.round(percent)}%
-        </span>
+        <span className="shrink-0 tabular-nums font-bold opacity-90">{Math.round(percent)}%</span>
       </div>
 
-      <ProgressBar aria-label="シーケンス進行度" value={percent} className="w-full">
-        <ProgressBar.Track>
-          <ProgressBar.Fill />
-        </ProgressBar.Track>
-      </ProgressBar>
+      <TuiProgress
+        value={percent}
+        color={status.color}
+        className="w-full"
+        showLabel={false}
+      />
     </section>
   );
 }

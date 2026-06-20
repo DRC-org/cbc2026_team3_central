@@ -445,9 +445,22 @@ class PickAndPlace(Sequence):
 | Formatter | **oxfmt** (Beta) | `web/.oxfmtrc.json`、Tailwind ソート + import ソート組み込み |
 | ESLint / Prettier | 不採用（削除済み）| oxlint + oxfmt に集約 |
 | フォント | `@fontsource/inter` + `@fontsource-variable/noto-sans-jp` + `@fontsource-variable/jetbrains-mono`（自己ホスト） | Tailwind `@theme` の `--font-sans` で英→Inter、日本語→Noto Sans JP のグリフ単位フォールバック |
-| アイコン | `lucide-react` | 絵文字非依存。`Icon` 共通ラッパー経由で利用 |
-| テーマ | **ライトのみ**（パープル基調 `oklch(55% 0.22 295)`） | `web/src/index.css` の `@theme` でトークン定義 |
+| UI ライブラリ | **TuiCss（CSS のみ）+ 自前 `tui/` プリミティブ** | 旧 HeroUI v3 から全面移行（後述「TUI リデザイン」参照）。`tuicss.js` は React と DOM 制御が競合するため不使用、モーダル/タブは React state で制御 |
+| アイコン | **不採用（Unicode/ASCII 記号化）** | 旧 `lucide-react` を撤去。◆◇▲▼█░ 等の記号で代替し依存ゼロ化 |
+| テーマ | **TUI 配色（IBM CGA 風・濃青背景＋白文字＋等幅）** | `web/src/index.css` の `:root` で `--tui-*` パレットと `--font-tui` を定義。html/body のベース色だけ `@theme` の `--color-bg`/`--color-text` を残す |
+| 実行環境 | **node/pnpm は mise 経由** | `mise exec -- pnpm <cmd>`（素のシェルには node が無い） |
 | scripts | `dev` / `build` / `preview` / `lint` / `lint:fix` / `format` / `format:check` / `check` | `check` = `lint && format:check && tsc -b --noEmit` |
+
+#### TUI リデザイン（2026-06 全面移行）
+
+操縦 UI を HeroUI v3（Tailwind v4 + React Aria）から **古典 TUI 風（TuiCss CSS のみ + 自前プリミティブ）** に全面置換した。
+
+- **依存削除**: `@heroui/react` / `@heroui/styles` / `lucide-react` を `pnpm remove`。`index.css` の `@import "@heroui/styles";` も除去。残依存は `tuicss`（CSS）と `@fontsource*`・Tailwind のみ。
+- **自前プリミティブ**: `web/src/components/tui/` に `TuiWindow` / `TuiPanel` / `TuiFieldset` / `TuiButton` / `TuiNav` / `TuiStatusbar` / `TuiTable` / `TuiProgress` / `TuiModal` / `TuiClock` を実装（`index.ts` で再エクスポート、`types.ts` に共通型）。
+- **tuicss.js 不使用**: モーダルの開閉・タブの active 切替は React state で制御し、`.tui-*` 補助クラス（`tui-shell` / `tui-fill` / `tui-col` / `tui-row` / `tui-scroll` 等）でレイアウトを補う。
+- **アイコン撤去**: lucide を全廃し Unicode/ASCII 記号（◆◇▲▼█░ 等）で代替。
+- **レイアウト**: ルート `.tui-shell`（100vw × 100svh, `overflow:hidden`）配下に AppHeader（固定）＋ flex-1 の main ＋ Statusbar（固定）。全体スクロールは禁止し、スクロールは `.tui-scroll` 領域内のみ（`min-h-0` チェーンで担保）。
+- **不変点**: WebSocket 送受信ロジック（`useRobotSocket` / `RobotContext` / `useMotorCheck`）とメッセージ型は未変更。今回の変更は UI 層のみ。
 
 #### ファイル一覧
 
@@ -458,12 +471,12 @@ class PickAndPlace(Sequence):
 | 4-3 | `Dashboard.tsx` | 両ロボットの状態概要を Card 化して表示、操縦画面へのリンク |
 | 4-4 | `RobotControl.tsx` | 操作画面: SequenceProgress + 大型 TriggerButton + MotorSummary（折りたたみ）|
 | 4-5 | `MotorTuning.tsx` | モータごとの状態 + PID パラメータ調整（Slider + 送信ボタン） |
-| 4-6 | `EStopButton.tsx` | ヘッダー右に常設。lucide AlertTriangle アイコン + 黄黒ストライプ装飾 |
+| 4-6 | `EStopButton.tsx` | ヘッダー右に常設。記号（◆）+ 黄黒ストライプ装飾（TUI リデザインで lucide 撤去） |
 | 4-7 | `EStopOverlay.tsx` | 全画面赤フラッシュ + パルスリング + 進捗リング SVG。時計回り 90° ツイストで解除 |
-| 4-8 | `AppHeader.tsx` | 共通ヘッダー（lucide アイコン化）+ Drawer メニュー（NavLink ベース）+ 全画面切替 |
+| 4-8 | `AppHeader.tsx` | 共通ヘッダー（記号化）+ TuiNav タブ + 全画面切替（TUI リデザインで lucide/Drawer 撤去） |
 | 4-9 | `router.tsx` | レイアウトルートで AppHeader と EStopOverlay を一元化、各ページから重複排除 |
 | 4-10 | `components/Icon.tsx`, `StatusDot.tsx`, `StatPill.tsx`, `ConnectionStatus.tsx`, `SequenceProgress.tsx`, `MotorStatus.tsx`, `MotorSummary.tsx`, `TriggerButton.tsx` | デザイントークンに準拠した共通 UI 部品 |
-| 4-11 | `index.css` / `index.html` | `@theme` トークン定義（色・フォント・影・角丸）、`color-scheme: light` 固定 |
+| 4-11 | `index.css` / `index.html` | TUI パレット（`:root` の `--tui-*`）+ `.tui-*` 補助クラス + 各種 keyframe（e-stop-flash / trigger-glow / connection-dot）。`@theme` は html/body ベース色（`--color-bg`/`--color-text`）とフォント変数のみ保持し、未使用の HeroUI 設計トークン（surface/accent/shadow/radius 等）は削除済み |
 
 ### Phase 5: ロボット固有シーケンス
 

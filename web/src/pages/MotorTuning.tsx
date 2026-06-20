@@ -1,8 +1,7 @@
-import { Button, Skeleton, Slider } from "@heroui/react";
-import { Send, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import { MotorStatus } from "@/components/MotorStatus";
+import { TuiButton, cx } from "@/components/tui";
 import { useRobot } from "@/context/RobotContext";
 
 const PID_PARAMS = [
@@ -12,9 +11,76 @@ const PID_PARAMS = [
 ] as const;
 
 const ROBOTS = [
-  { key: "main_hand", label: "メインハンド" },
-  { key: "sub_hand", label: "サブハンド" },
+  { key: "main_hand", label: "MAIN HAND" },
+  { key: "sub_hand", label: "SUB HAND" },
 ] as const;
+
+const STEP = 0.01;
+
+interface PidRowProps {
+  label: string;
+  max: number;
+  value: number;
+  onChange: (val: number) => void;
+  onSend: () => void;
+}
+
+// PID 1 項目の行: ◄ 微減 / TUI レンジ / ► 微増 / 数値表示 / SEND。
+// 送信は明示ボタンのみ（スライダー操作だけでは set_param を飛ばさない）。
+function PidRow({ label, max, value, onChange, onSend }: PidRowProps) {
+  // クランプ後に STEP 単位の浮動小数誤差を丸める。
+  const clamp = (val: number) => {
+    const next = Math.min(max, Math.max(0, val));
+    return Math.round(next / STEP) * STEP;
+  };
+  const fillPercent = `${(value / max) * 100}%`;
+
+  return (
+    <div className="flex items-center gap-2 px-1 py-0.5">
+      <span className="w-7 shrink-0 font-bold">{label}</span>
+      <TuiButton
+        variant="secondary"
+        flat
+        aria-label={`${label} を減らす`}
+        onPress={() => onChange(clamp(value - STEP))}
+        className="shrink-0 px-2 py-0"
+      >
+        ◄
+      </TuiButton>
+      <input
+        type="range"
+        className="tui-range flex-1"
+        aria-label={label}
+        min={0}
+        max={max}
+        step={STEP}
+        value={value}
+        // 塗り境界をインライン変数で渡す（CSS グラデの分岐点）。
+        style={{ "--tui-range-fill": fillPercent } as React.CSSProperties}
+        onChange={(e) => onChange(clamp(Number(e.target.value)))}
+      />
+      <TuiButton
+        variant="secondary"
+        flat
+        aria-label={`${label} を増やす`}
+        onPress={() => onChange(clamp(value + STEP))}
+        className="shrink-0 px-2 py-0"
+      >
+        ►
+      </TuiButton>
+      <span className="w-14 shrink-0 text-right font-bold tabular-nums">{value.toFixed(2)}</span>
+      <TuiButton
+        variant="primary"
+        flat
+        aria-label={`${label} を送信`}
+        onPress={onSend}
+        className="shrink-0 px-2 py-0 font-bold"
+      >
+        ► SEND
+      </TuiButton>
+    </div>
+  );
+}
 
 export function MotorTuning() {
   const { states, send } = useRobot();
@@ -34,83 +100,46 @@ export function MotorTuning() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 space-y-8 overflow-y-auto px-4 py-6 md:px-8 md:py-10">
+    <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 md:grid-cols-2">
       {ROBOTS.map(({ key, label }) => {
         const state = states[key];
+        const motors = state ? Object.entries(state.motors) : [];
         return (
-          <section key={key} className="flex flex-col gap-4">
-            <h2 className="flex items-center gap-2 text-2xl font-extrabold text-[color:var(--color-text)]">
-              <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]">
-                <SlidersHorizontal size={18} strokeWidth={2.4} />
-              </span>
-              {label}
-            </h2>
+          <div key={key} className="tui-window tui-fill overflow-hidden">
+            <fieldset className="tui-fieldset tui-fill">
+              <legend>{label}</legend>
 
-            {!state ? (
-              <div className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6">
-                <p className="mb-3 text-sm font-medium text-[color:var(--color-text-muted)]">
-                  データ未受信
-                </p>
-                <Skeleton className="h-6 w-1/2 rounded" />
-              </div>
-            ) : Object.keys(state.motors).length === 0 ? (
-              <p className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-6 text-sm text-[color:var(--color-text-muted)]">
-                モータ情報なし
-              </p>
-            ) : (
-              <div className="grid gap-4 lg:grid-cols-2">
-                {Object.entries(state.motors).map(([motorName, motorState]) => (
-                  <div
-                    key={motorName}
-                    className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 shadow-[var(--shadow-card)]"
-                  >
-                    <MotorStatus name={motorName} state={motorState} />
-                    <div className="flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-4">
-                      <h3 className="text-xs font-bold tracking-wider text-[color:var(--color-text-subtle)] uppercase">
-                        パラメータ設定
-                      </h3>
-                      {PID_PARAMS.map(({ key: paramKey, label: paramLabel, max }) => (
-                        <div key={paramKey} className="flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-[color:var(--color-text)]">
-                              {paramLabel}
-                            </span>
-                            <span className="font-mono text-sm text-[color:var(--color-text-muted)] tabular-nums">
-                              {getValue(motorName, paramKey).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Slider
-                              aria-label={paramLabel}
-                              minValue={0}
-                              maxValue={max}
-                              step={0.01}
-                              value={getValue(motorName, paramKey)}
-                              onChange={(v) => setValue(motorName, paramKey, v as number)}
-                              className="flex-1"
-                            >
-                              <Slider.Track>
-                                <Slider.Fill />
-                                <Slider.Thumb />
-                              </Slider.Track>
-                            </Slider>
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              onPress={() => handleSend(motorName, paramKey)}
-                            >
-                              <Send size={14} strokeWidth={2.4} />
-                              送信
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+              {!state ? (
+                <p className="px-2 py-4 opacity-80">データ未受信 — 接続待機中...</p>
+              ) : motors.length === 0 ? (
+                <p className="px-2 py-4 opacity-80">モータ情報なし</p>
+              ) : (
+                // モータ数が増えても枠内のみスクロールさせ全体スクロールは禁止する。
+                <div className="tui-scroll tui-col flex-1 gap-3 pr-1">
+                  {motors.map(([motorName, motorState]) => (
+                    <fieldset key={motorName} className={cx("tui-fieldset", "mb-0")}>
+                      <legend>{motorName}</legend>
+                      <div className="mb-2">
+                        <MotorStatus name={motorName} state={motorState} compact />
+                      </div>
+                      <div className="border-t border-white/30 pt-2">
+                        {PID_PARAMS.map(({ key: paramKey, label: paramLabel, max }) => (
+                          <PidRow
+                            key={paramKey}
+                            label={paramLabel}
+                            max={max}
+                            value={getValue(motorName, paramKey)}
+                            onChange={(val) => setValue(motorName, paramKey, val)}
+                            onSend={() => handleSend(motorName, paramKey)}
+                          />
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+                </div>
+              )}
+            </fieldset>
+          </div>
         );
       })}
     </main>

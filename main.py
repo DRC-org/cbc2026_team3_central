@@ -233,6 +233,36 @@ def _create_bus(channel: str, *, dry_run: bool) -> can.Bus:
     return can.Bus(interface="socketcan", channel=channel)
 
 
+def _create_motor(motor_name: str, motor_cfg: dict) -> MotorDriver | None:
+    """設定からモータを生成し、ドライバ固有設定も反映する。"""
+    driver_type = motor_cfg["driver"]
+    driver_cls = _DRIVER_MAP.get(driver_type)
+    if driver_cls is None:
+        logger.warning("未知のドライバタイプ: %s (スキップ)", driver_type)
+        return None
+
+    can_id = motor_cfg["can_id"]
+    if isinstance(can_id, str):
+        can_id = int(can_id, 0)
+
+    if driver_type == "edulite05":
+        host_id = motor_cfg.get("host_id", 0xFD)
+        if isinstance(host_id, str):
+            host_id = int(host_id, 0)
+        return Edulite05Driver(
+            name=motor_name,
+            can_id=can_id,
+            host_id=host_id,
+            mode=motor_cfg.get("mode", "position"),
+            limit_speed=float(motor_cfg.get("limit_speed", 2.0)),
+            limit_current=float(motor_cfg.get("limit_current", 5.0)),
+            position_kp=float(motor_cfg.get("position_kp", 30.0)),
+            set_zero_on_start=bool(motor_cfg.get("set_zero_on_start", False)),
+        )
+
+    return driver_cls(name=motor_name, can_id=can_id)
+
+
 def _setup_robot(config: dict, *, dry_run: bool) -> tuple[str, CANManager, dict[str, MotorDriver]]:
     """config dict からロボット名・CANManager・モータ群をセットアップする。"""
     robot_name: str = config["robot_name"]
@@ -246,17 +276,9 @@ def _setup_robot(config: dict, *, dry_run: bool) -> tuple[str, CANManager, dict[
     motors: dict[str, MotorDriver] = {}
     motor_configs: dict = config.get("motors") or {}
     for motor_name, motor_cfg in motor_configs.items():
-        driver_type = motor_cfg["driver"]
-        driver_cls = _DRIVER_MAP.get(driver_type)
-        if driver_cls is None:
-            logger.warning("未知のドライバタイプ: %s (スキップ)", driver_type)
+        motor = _create_motor(motor_name, motor_cfg)
+        if motor is None:
             continue
-
-        can_id = motor_cfg["can_id"]
-        if isinstance(can_id, str):
-            can_id = int(can_id, 0)
-
-        motor = driver_cls(name=motor_name, can_id=can_id)
         bus_name = motor_cfg["bus"]
         can_manager.add_motor(bus_name, motor)
         motors[motor_name] = motor
@@ -350,11 +372,9 @@ async def main() -> None:
             len(motors),
         )
 
-    tasks: list[asyncio.Task] = []
-    for mgr in can_managers:
-        tasks.append(asyncio.create_task(mgr.run()))
-
     try:
+        for mgr in can_managers:
+            await mgr.run()
         await server.start()
     except asyncio.CancelledError:
         pass
@@ -362,8 +382,6 @@ async def main() -> None:
         for mgr in can_managers:
             await mgr.shutdown()
         await server.cleanup()
-        for task in tasks:
-            task.cancel()
 
 
 if __name__ == "__main__":

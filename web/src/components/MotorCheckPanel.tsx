@@ -1,7 +1,4 @@
-import { Alert, Button, Modal, ProgressBar, Spinner } from "@heroui/react";
-import { AlertTriangle, CheckCircle2, Circle, Minus, RotateCw, Timer, XCircle } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-
+import { TuiButton, TuiModal, TuiProgress, cx, type TuiColor } from "@/components/tui";
 import { useMotorCheck } from "@/hooks/useMotorCheck";
 import type { MotorCheckOverall, MotorCheckRecord, MotorCheckResult } from "@/hooks/useRobotSocket";
 
@@ -11,92 +8,32 @@ interface MotorCheckPanelProps {
   onOpenChange: (open: boolean) => void;
 }
 
-interface ResultStyle {
-  icon: LucideIcon;
-  text: string;
-  bg: string;
-  ring: string;
-  label: string;
-}
-
-const RESULT_STYLES: Record<MotorCheckResult, ResultStyle> = {
-  pending: {
-    icon: Circle,
-    text: "text-[color:var(--color-text-muted)]",
-    bg: "bg-[color:var(--color-surface-2)]",
-    ring: "ring-[color:var(--color-border)]",
-    label: "待機中",
-  },
-  running: {
-    icon: RotateCw,
-    text: "text-[color:var(--color-accent)]",
-    bg: "bg-[color:var(--color-accent-soft)]",
-    ring: "ring-[color:var(--color-accent)]/40",
-    label: "確認中",
-  },
-  passed: {
-    icon: CheckCircle2,
-    text: "text-emerald-700",
-    bg: "bg-emerald-50",
-    ring: "ring-emerald-500/40",
-    label: "合格",
-  },
-  failed: {
-    icon: XCircle,
-    text: "text-red-700",
-    bg: "bg-red-50",
-    ring: "ring-red-500/40",
-    label: "失敗",
-  },
-  timeout: {
-    icon: Timer,
-    text: "text-amber-700",
-    bg: "bg-amber-50",
-    ring: "ring-amber-500/40",
-    label: "タイムアウト",
-  },
-  skipped: {
-    icon: Minus,
-    text: "text-[color:var(--color-text-subtle)]",
-    bg: "bg-[color:var(--color-surface-2)]",
-    ring: "ring-[color:var(--color-border)]",
-    label: "中断",
-  },
-};
+// 各モータ結果を TUI 記号 + セマンティック色クラスで表現する。
+const RESULT_STYLES: Record<MotorCheckResult, { symbol: string; textClass: string; label: string }> =
+  {
+    pending: { symbol: "○", textClass: "secondary-text", label: "待機中" },
+    running: { symbol: "►", textClass: "info-text", label: "確認中" },
+    passed: { symbol: "✓", textClass: "success-text", label: "合格" },
+    failed: { symbol: "✗", textClass: "danger-text", label: "失敗" },
+    timeout: { symbol: "⚠", textClass: "warning-text", label: "タイムアウト" },
+    skipped: { symbol: "·", textClass: "secondary-text", label: "中断" },
+  };
 
 const OVERALL_STYLES: Record<
   MotorCheckOverall,
-  { text: string; bg: string; ring: string; label: string; icon: LucideIcon }
+  { symbol: string; textClass: string; color: TuiColor; label: string }
 > = {
-  running: {
-    text: "text-[color:var(--color-accent)]",
-    bg: "bg-[color:var(--color-accent-soft)]",
-    ring: "ring-[color:var(--color-accent)]/40",
-    label: "実行中",
-    icon: RotateCw,
-  },
-  ok: {
-    text: "text-emerald-700",
-    bg: "bg-emerald-50",
-    ring: "ring-emerald-500/40",
-    label: "全モータ合格",
-    icon: CheckCircle2,
-  },
-  partial: {
-    text: "text-amber-700",
-    bg: "bg-amber-50",
-    ring: "ring-amber-500/40",
-    label: "一部失敗",
-    icon: AlertTriangle,
-  },
-  failed: {
-    text: "text-red-700",
-    bg: "bg-red-50",
-    ring: "ring-red-500/40",
-    label: "失敗",
-    icon: XCircle,
-  },
+  running: { symbol: "►", textClass: "info-text", color: "info", label: "実行中" },
+  ok: { symbol: "✓", textClass: "success-text", color: "success", label: "全モータ合格" },
+  partial: { symbol: "⚠", textClass: "warning-text", color: "warning", label: "一部失敗" },
+  failed: { symbol: "✗", textClass: "danger-text", color: "danger", label: "失敗" },
 };
+
+function formatNumber(value: number): string {
+  if (Number.isInteger(value)) return value.toFixed(0);
+  if (Math.abs(value) >= 100) return value.toFixed(1);
+  return value.toFixed(2);
+}
 
 function describeRecord(record: MotorCheckRecord): string {
   switch (record.result) {
@@ -118,41 +55,26 @@ function describeRecord(record: MotorCheckRecord): string {
   }
 }
 
-function formatNumber(value: number): string {
-  if (Number.isInteger(value)) return value.toFixed(0);
-  if (Math.abs(value) >= 100) return value.toFixed(1);
-  return value.toFixed(2);
-}
-
 function MotorRow({ record, isCurrent }: { record: MotorCheckRecord; isCurrent: boolean }) {
   const result: MotorCheckResult =
     isCurrent && record.result === "pending" ? "running" : record.result;
   const style = RESULT_STYLES[result];
   const description = describeRecord({ ...record, result });
-  const RowIcon = style.icon;
 
   return (
-    <div
-      className={`flex items-center justify-between gap-3 rounded-[10px] px-3 py-2 ring-1 ${style.bg} ${style.ring}`}
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        {result === "running" ? (
-          <Spinner size="sm" />
-        ) : (
-          <RowIcon size={18} strokeWidth={2.5} className={style.text} />
-        )}
+    <div className="flex items-center justify-between gap-3 px-1 py-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className={cx("w-4 shrink-0 text-center font-bold", style.textClass)}>
+          {style.symbol}
+        </span>
         <div className="flex min-w-0 flex-col">
-          <span className="truncate font-mono text-sm font-semibold text-[color:var(--color-text)]">
-            {record.motor}
-          </span>
-          <span className="truncate text-xs text-[color:var(--color-text-muted)]">
-            bus: {record.bus}
-          </span>
+          <span className="truncate font-bold">{record.motor}</span>
+          <span className="text-xs opacity-60">bus: {record.bus}</span>
         </div>
       </div>
-      <div className={`flex flex-col items-end gap-0.5 text-xs ${style.text}`}>
+      <div className={cx("flex flex-col items-end gap-0.5 text-xs", style.textClass)}>
         <span className="font-bold">{style.label}</span>
-        <span className="font-mono opacity-80">{description}</span>
+        <span className="opacity-80">{description}</span>
       </div>
     </div>
   );
@@ -170,99 +92,84 @@ export function MotorCheckPanel({ robotName, isOpen, onOpenChange }: MotorCheckP
   const index = state.progress?.index ?? state.records.length;
   const percent = total > 0 ? Math.min(100, Math.round((index / total) * 100)) : 0;
 
+  const footerLabel = isRunning
+    ? "実行中..."
+    : state.status === "completed"
+      ? "完了"
+      : isError
+        ? "失敗"
+        : "未実行";
+
   return (
-    <Modal>
-      <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
-        <Modal.Container placement="center" size="lg">
-          <Modal.Dialog className="bg-[color:var(--color-surface)]">
-            <Modal.Header className="border-b border-[color:var(--color-border)]">
-              <div className="flex w-full items-center justify-between gap-3">
-                <Modal.Heading className="text-lg font-bold text-[color:var(--color-text)]">
-                  動作確認 — {robotName}
-                </Modal.Heading>
-                {overallStyle ? (
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${overallStyle.bg} ${overallStyle.text} ${overallStyle.ring}`}
-                  >
-                    <overallStyle.icon size={14} strokeWidth={2.6} />
-                    {overallStyle.label}
-                  </span>
-                ) : null}
-              </div>
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4 p-5">
-              {isRunning ? (
-                <ProgressBar aria-label="動作確認進行度" value={percent} className="w-full">
-                  <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
-                    <span className="font-mono tabular-nums">
-                      {index} / {total}
-                    </span>
-                    <span className="truncate font-semibold text-[color:var(--color-accent)]">
-                      {state.current ?? "—"}
-                    </span>
-                  </div>
-                  <ProgressBar.Track>
-                    <ProgressBar.Fill />
-                  </ProgressBar.Track>
-                </ProgressBar>
-              ) : null}
+    <TuiModal
+      isOpen={isOpen}
+      onClose={() => onOpenChange(false)}
+      title={`MOTOR CHECK — ${robotName}`}
+      footer={
+        <div className="flex w-full items-center justify-between gap-2">
+          <span className="text-xs opacity-70">{footerLabel}</span>
+          <div className="flex gap-2">
+            {isRunning ? (
+              <TuiButton variant="danger" flat onPress={abort}>
+                ■ 中断
+              </TuiButton>
+            ) : state.records.length > 0 || isError ? (
+              <TuiButton variant="info" flat onPress={start}>
+                ► リトライ
+              </TuiButton>
+            ) : null}
+            <TuiButton variant="secondary" flat onPress={() => onOpenChange(false)}>
+              閉じる
+            </TuiButton>
+          </div>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3" style={{ minWidth: "min(560px, 80vw)" }}>
+        {overallStyle ? (
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold opacity-80">OVERALL</span>
+            <span className={cx("font-bold", overallStyle.textClass)}>
+              [{overallStyle.symbol} {overallStyle.label}]
+            </span>
+          </div>
+        ) : null}
 
-              {isError ? (
-                <Alert status="danger">
-                  <Alert.Indicator />
-                  <Alert.Content>
-                    <Alert.Title>エラー</Alert.Title>
-                    <Alert.Description>{state.error}</Alert.Description>
-                  </Alert.Content>
-                </Alert>
-              ) : null}
+        {isRunning ? (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="tabular-nums opacity-80">
+                {index} / {total}
+              </span>
+              <span className="info-text truncate font-bold">{state.current ?? "—"}</span>
+            </div>
+            <TuiProgress value={percent} color="info" className="w-full" showLabel={false} />
+          </div>
+        ) : null}
 
-              {state.records.length === 0 && !isRunning && !isError ? (
-                <div className="rounded-[10px] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-4 text-center text-sm text-[color:var(--color-text-muted)]">
-                  動作確認はまだ実行されていません。
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {state.records.map((record) => (
-                    <MotorRow
-                      key={record.motor}
-                      record={record}
-                      isCurrent={isRunning && state.current === record.motor}
-                    />
-                  ))}
-                </div>
-              )}
-            </Modal.Body>
-            <Modal.Footer className="border-t border-[color:var(--color-border)]">
-              <div className="flex w-full items-center justify-between gap-2">
-                <div className="text-xs text-[color:var(--color-text-muted)]">
-                  {isRunning
-                    ? "実行中..."
-                    : state.status === "completed"
-                      ? "完了"
-                      : isError
-                        ? "失敗"
-                        : "未実行"}
-                </div>
-                <div className="flex gap-2">
-                  {isRunning ? (
-                    <Button variant="outline" onPress={abort}>
-                      中断
-                    </Button>
-                  ) : state.records.length > 0 || isError ? (
-                    <Button variant="outline" onPress={start}>
-                      リトライ
-                    </Button>
-                  ) : null}
-                  <Button slot="close" variant="primary">
-                    閉じる
-                  </Button>
-                </div>
-              </div>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+        {isError ? (
+          <div className="danger-text font-bold">
+            <p>⚠ エラー</p>
+            <p className="mt-1 text-sm opacity-90">{state.error}</p>
+          </div>
+        ) : null}
+
+        {state.records.length === 0 && !isRunning && !isError ? (
+          <p className="px-1 py-3 text-sm opacity-70">
+            動作確認はまだ実行されていません。
+          </p>
+        ) : (
+          <div className="tui-scroll flex flex-col" style={{ maxHeight: "50vh" }}>
+            {state.records.map((record) => (
+              <MotorRow
+                key={record.motor}
+                record={record}
+                isCurrent={isRunning && state.current === record.motor}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </TuiModal>
   );
 }

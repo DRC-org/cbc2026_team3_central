@@ -1,35 +1,37 @@
 import { Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import { AppHeader } from "@/components/AppHeader";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { EStopOverlay } from "@/components/EStopOverlay";
+import { TuiClock, TuiStatusbar } from "@/components/tui";
 import { useRobot } from "@/context/RobotContext";
 import { Dashboard } from "@/pages/Dashboard";
 import { MotorTuning } from "@/pages/MotorTuning";
 import { RobotControl } from "@/pages/RobotControl";
-
-interface PageMeta {
-  title: string;
-  subtitle?: string;
-}
-
-const PAGE_META: Record<string, PageMeta> = {
-  "/": { title: "ロボットステータス", subtitle: "メインハンド + サブハンド 統合ビュー" },
-  "/main-hand": { title: "メインハンド", subtitle: "シーケンス操縦" },
-  "/sub-hand": { title: "サブハンド", subtitle: "シーケンス操縦" },
-  "/motors": { title: "モータ調整", subtitle: "PID パラメータ・状態モニタ" },
-};
+import { Background, TuiBackground } from "react-tuicss";
 
 function AppLayout() {
   const { connected, eStopActive, onEStop, onEStopRelease } = useRobot();
   const location = useLocation();
-  const meta = PAGE_META[location.pathname] ?? { title: "CBC2026 Team3" };
+
+  const statusItems = [
+    <ConnectionStatus key="conn" connected={connected} />,
+    <span key="estop" className={eStopActive ? "danger-text" : "success-text"}>
+      {eStopActive ? "◆ E-STOP ACTIVE" : "◇ E-STOP READY"}
+    </span>,
+    <span key="route">PATH: {location.pathname}</span>,
+    <TuiClock key="clock" />,
+  ];
 
   return (
-    <div className="flex h-svh flex-col overflow-hidden bg-[color:var(--color-bg)] text-[color:var(--color-text)]">
-      <AppHeader title={meta.title} connected={connected} onEStop={onEStop} />
-      <Outlet />
+    <TuiBackground color={Background.BlueWhite}>
+      <AppHeader connected={connected} onEStop={onEStop} />
+      <main className="tui-col" style={{ flex: "1 1 auto" }}>
+        <Outlet />
+      </main>
+      <TuiStatusbar items={statusItems} fixed={false} />
       <EStopOverlay active={eStopActive} onRelease={onEStopRelease} />
-    </div>
+    </TuiBackground>
   );
 }
 
@@ -42,7 +44,10 @@ export function AppRoutes() {
           path="main-hand"
           element={<RobotControl robotKey="main_hand" label="メインハンド" />}
         />
-        <Route path="sub-hand" element={<RobotControl robotKey="sub_hand" label="サブハンド" />} />
+        <Route
+          path="sub-hand"
+          element={<RobotControl robotKey="sub_hand" label="サブハンド" />}
+        />
         <Route path="motors" element={<MotorTuning />} />
       </Route>
     </Routes>

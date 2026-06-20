@@ -6,306 +6,289 @@ import struct
 import can
 import pytest
 
-from lib.drivers.base import MotorState
-from lib.drivers.edulite05 import Edulite05Driver
+from lib.drivers.base import ControlMode, MotorState
+from lib.drivers.edulite05 import (
+    Edulite05Driver,
+    Edulite05Fault,
+    Edulite05RunMode,
+)
 
 
-class TestBuildCanId:
-    def test_type1_motor1(self):
-        # Type1, data_area2=0x0000, dest=0x01
-        # (0x01 << 24) | (0x0000 << 8) | 0x01 = 0x01000001
-        assert Edulite05Driver.build_can_id(0x01, 0x0000, 0x01) == 0x01000001
-
-    def test_type3_enable(self):
-        # Type3, data_area2=0x0000, dest=0x7F
-        assert Edulite05Driver.build_can_id(0x03, 0x0000, 0x7F) == 0x0300007F
-
-    def test_type1_with_torque_in_data_area2(self):
-        # Type1, data_area2=0x8000 (中央=トルク0), dest=0x05
-        assert Edulite05Driver.build_can_id(0x01, 0x8000, 0x05) == 0x01800005
-
-    def test_type6_set_zero(self):
-        assert Edulite05Driver.build_can_id(0x06, 0x0001, 0x0A) == 0x0600010A
-
-
-class TestParseCanId:
-    def test_roundtrip(self):
-        arb_id = Edulite05Driver.build_can_id(0x02, 0x1234, 0x05)
-        comm_type, data_area2, dest_id = Edulite05Driver.parse_can_id(arb_id)
-        assert comm_type == 0x02
-        assert data_area2 == 0x1234
-        assert dest_id == 0x05
-
-    def test_feedback_id(self):
-        # Type2, mode_status=2(Motor), fault=0, motor_id=0x05, host_id=0x00
-        # data_area2: (2 << 14) | (0 << 8) | (0x05 << 0)... 待って、仕様を再確認
-        # Bit23~22: モード状態, Bit21~16: 故障コード, Bit15~8: モータID, Bit7~0: ホストID
-        # しかし Bit7~0 は dest_id (= ホストID) なので data_area2 は Bit23~8
-        # data_area2 = (mode_status << 14) | (fault_code << 8) | motor_id
-        # mode=2, fault=0, motor_id=5 → (2<<14)|(0<<8)|5 = 0x8005
-        arb_id = Edulite05Driver.build_can_id(0x02, 0x8005, 0x00)
-        comm_type, data_area2, dest_id = Edulite05Driver.parse_can_id(arb_id)
-        assert comm_type == 0x02
-        assert data_area2 == 0x8005
-        assert dest_id == 0x00
+def feedback_message(
+    driver: Edulite05Driver,
+    *,
+    position: float = 0.0,
+    velocity: float = 0.0,
+    torque: float = 0.0,
+    temperature: float = 25.0,
+    mode_state: int = 2,
+    fault_bits: int = 0,
+    host_id: int | None = None,
+) -> can.Message:
+    data_area2 = (mode_state << 14) | (fault_bits << 8) | driver.can_id
+    arbitration_id = driver.build_can_id(
+        driver.COMM_TYPE_FEEDBACK,
+        data_area2,
+        driver.host_id if host_id is None else host_id,
+    )
+    data = struct.pack(
+        ">HHHH",
+        driver.float_to_uint16(position, driver.POS_MIN, driver.POS_MAX),
+        driver.float_to_uint16(velocity, driver.VEL_MIN, driver.VEL_MAX),
+        driver.float_to_uint16(torque, driver.TORQUE_MIN, driver.TORQUE_MAX),
+        int(temperature * 10),
+    )
+    return can.Message(arbitration_id=arbitration_id, data=data, is_extended_id=True)
 
 
-class TestFloatToUint16:
-    def test_center_value(self):
-        raw = Edulite05Driver.float_to_uint16(0.0, -12.0, 12.0)
-        assert raw == 32767  # int(65535 / 2) = 32767
+def test_protocol_ranges_and_default_host_id() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
 
-    def test_min_value(self):
-        raw = Edulite05Driver.float_to_uint16(-12.0, -12.0, 12.0)
-        assert raw == 0
-
-    def test_max_value(self):
-        raw = Edulite05Driver.float_to_uint16(12.0, -12.0, 12.0)
-        assert raw == 65535
+    assert driver.host_id == 0xFD
+    assert (driver.POS_MIN, driver.POS_MAX) == (-12.57, 12.57)
+    assert (driver.VEL_MIN, driver.VEL_MAX) == (-50.0, 50.0)
+    assert (driver.TORQUE_MIN, driver.TORQUE_MAX) == (-6.0, 6.0)
 
 
-class TestUint16ToFloat:
-    def test_center_value(self):
-        val = Edulite05Driver.uint16_to_float(32768, -12.0, 12.0)
-        assert val == pytest.approx(0.0, abs=0.001)
-
-    def test_min_value(self):
-        val = Edulite05Driver.uint16_to_float(0, -12.0, 12.0)
-        assert val == pytest.approx(-12.0)
-
-    def test_max_value(self):
-        val = Edulite05Driver.uint16_to_float(65535, -12.0, 12.0)
-        assert val == pytest.approx(12.0)
+def test_float_encoding_clamps_out_of_range_values() -> None:
+    assert Edulite05Driver.float_to_uint16(-7.0, -6.0, 6.0) == 0
+    assert Edulite05Driver.float_to_uint16(7.0, -6.0, 6.0) == 65535
 
 
-class TestEncodeMitMode:
-    def test_encode_mit_zero_command(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        msg = drv.encode_mit(p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, torque=0.0)
+def test_enable_disable_and_zero_use_host_id_in_can_id() -> None:
+    driver = Edulite05Driver("m1", can_id=5, host_id=0xFD)
 
-        # CAN ID: Type1, data_area2=torque_raw(=32767=0x7FFF), dest=0x05
-        expected_id = Edulite05Driver.build_can_id(0x01, 0x7FFF, 0x05)
-        assert msg.arbitration_id == expected_id
-        assert msg.is_extended_id is True
+    enable = driver.encode_enable()
+    disable = driver.encode_disable()
+    zero = driver.encode_set_zero()
 
-        # データ: 各パラメータの中央値 / 最小値
-        p_raw = Edulite05Driver.float_to_uint16(0.0, -4 * math.pi, 4 * math.pi)
-        v_raw = Edulite05Driver.float_to_uint16(0.0, -30.0, 30.0)
-        kp_raw = Edulite05Driver.float_to_uint16(0.0, 0.0, 500.0)
-        kd_raw = Edulite05Driver.float_to_uint16(0.0, 0.0, 5.0)
-        expected_data = struct.pack(">HHHH", p_raw, v_raw, kp_raw, kd_raw)
-        assert msg.data == expected_data
+    assert enable.arbitration_id == driver.build_can_id(driver.COMM_TYPE_ENABLE, 0xFD, 5)
+    assert disable.arbitration_id == driver.build_can_id(driver.COMM_TYPE_DISABLE, 0xFD, 5)
+    assert zero.arbitration_id == driver.build_can_id(driver.COMM_TYPE_SET_ZERO, 0xFD, 5)
+    assert enable.data == bytes(8)
+    assert disable.data == bytes(8)
+    assert zero.data == b"\x01" + bytes(7)
+    assert enable.is_extended_id and disable.is_extended_id and zero.is_extended_id
 
 
-class TestDecodeFeedback:
-    def test_decode_feedback(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-
-        pos_raw = Edulite05Driver.float_to_uint16(1.0, -4 * math.pi, 4 * math.pi)
-        vel_raw = Edulite05Driver.float_to_uint16(2.0, -30.0, 30.0)
-        torque_raw = Edulite05Driver.float_to_uint16(0.5, -12.0, 12.0)
-        temp_raw = 250  # 25.0℃
-
-        data = struct.pack(">HHH", pos_raw, vel_raw, torque_raw) + struct.pack(">H", temp_raw)
-        # data_area2: mode=2(Motor), fault=0, motor_id=0x05
-        data_area2 = (2 << 14) | (0 << 8) | 0x05
-        arb_id = Edulite05Driver.build_can_id(0x02, data_area2, 0x00)
-        msg = can.Message(arbitration_id=arb_id, data=data, is_extended_id=True)
-
-        state = drv.decode_feedback(msg)
-        assert isinstance(state, MotorState)
-        assert state.position == pytest.approx(1.0, abs=0.01)
-        assert state.velocity == pytest.approx(2.0, abs=0.01)
-        assert state.current == pytest.approx(0.5, abs=0.01)
-        assert state.temperature == pytest.approx(25.0)
+def test_fault_clear_requires_explicit_request() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    assert driver.encode_disable(clear_fault=True).data == b"\x01" + bytes(7)
 
 
-class TestEncodeEnable:
-    def test_encode_enable(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        msg = drv.encode_enable()
+def test_write_parameter_uses_little_endian_parameter_and_float() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    msg = driver.encode_write_param_float(driver.PARAM_LOC_REF, 1.0)
 
-        expected_id = Edulite05Driver.build_can_id(0x03, 0x0000, 0x05)
-        assert msg.arbitration_id == expected_id
-        assert msg.is_extended_id is True
-        assert msg.data == bytes(8)
+    assert msg.arbitration_id == driver.build_can_id(driver.COMM_TYPE_WRITE_PARAM, 0xFD, 5)
+    assert msg.data == struct.pack("<Hxxf", 0x7016, 1.0)
 
 
-class TestEncodeDisable:
-    def test_encode_disable(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        msg = drv.encode_disable()
-
-        expected_id = Edulite05Driver.build_can_id(0x04, 0x0000, 0x05)
-        assert msg.arbitration_id == expected_id
-        assert msg.is_extended_id is True
-        assert msg.data == bytes(8)
+def test_run_mode_uses_u8_payload() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    msg = driver.encode_run_mode(Edulite05RunMode.POSITION)
+    assert msg.data == struct.pack("<HxxBxxx", driver.PARAM_RUN_MODE, 1)
 
 
-class TestMatchesFeedback:
-    def test_matches_own_feedback(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        # Type2 フィードバック, motor_id=0x05
-        data_area2 = (2 << 14) | (0 << 8) | 0x05
-        arb_id = Edulite05Driver.build_can_id(0x02, data_area2, 0x00)
-        msg = can.Message(arbitration_id=arb_id, data=bytes(8), is_extended_id=True)
-        assert drv.matches_feedback(msg) is True
-
-    def test_matches_feedback_wrong_motor(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        # Type2 フィードバック, motor_id=0x0A (別モータ)
-        data_area2 = (2 << 14) | (0 << 8) | 0x0A
-        arb_id = Edulite05Driver.build_can_id(0x02, data_area2, 0x00)
-        msg = can.Message(arbitration_id=arb_id, data=bytes(8), is_extended_id=True)
-        assert drv.matches_feedback(msg) is False
-
-    def test_matches_feedback_wrong_type(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        # Type1 (制御送信) は フィードバックではない
-        arb_id = Edulite05Driver.build_can_id(0x01, 0x0000, 0x05)
-        msg = can.Message(arbitration_id=arb_id, data=bytes(8), is_extended_id=True)
-        assert drv.matches_feedback(msg) is False
+@pytest.mark.parametrize(
+    ("mode", "param_id"),
+    [
+        (ControlMode.POSITION, Edulite05Driver.PARAM_LOC_REF),
+        (ControlMode.VELOCITY, Edulite05Driver.PARAM_SPD_REF),
+        (ControlMode.CURRENT, Edulite05Driver.PARAM_IQ_REF),
+    ],
+)
+def test_encode_target_maps_control_mode_to_parameter(mode: ControlMode, param_id: int) -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    msg = driver.encode_target(mode, 1.25)
+    assert msg.data == struct.pack("<Hxxf", param_id, 1.25)
 
 
-class TestHealth:
-    """ヘルスチェック判定 (Phase 6 段階②)。"""
-
-    def _feed(self, drv: Edulite05Driver, *, torque: float = 0.0, temp_c: float = 25.0) -> None:
-        # フィードバックフレームを 1 つ流して内部 state を更新する補助
-        pos_raw = Edulite05Driver.float_to_uint16(0.0, -4 * math.pi, 4 * math.pi)
-        vel_raw = Edulite05Driver.float_to_uint16(0.0, -30.0, 30.0)
-        torque_raw = Edulite05Driver.float_to_uint16(torque, -12.0, 12.0)
-        temp_raw = int(temp_c * 10)
-        data = struct.pack(">HHHH", pos_raw, vel_raw, torque_raw, temp_raw)
-        data_area2 = (2 << 14) | (0 << 8) | drv.can_id
-        arb_id = Edulite05Driver.build_can_id(0x02, data_area2, 0x00)
-        msg = can.Message(arbitration_id=arb_id, data=data, is_extended_id=True)
-        drv.update_state(msg)
-
-    def test_thermal_warning_at_threshold(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        self._feed(drv, temp_c=65.0)
-        assert drv.has_thermal_warning(temp_warning_c=65.0, temp_critical_c=80.0) is True
-
-    def test_thermal_fault_below_critical(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        self._feed(drv, temp_c=70.0)
-        assert drv.has_thermal_fault(temp_critical_c=80.0) is False
-
-    def test_overcurrent_warning_at_torque_limit(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        # TORQUE_MAX=12.0 に対して 11.0 で警告
-        self._feed(drv, torque=11.5)
-        assert drv.has_overcurrent_warning() is True
-
-    def test_overcurrent_warning_below_threshold(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        self._feed(drv, torque=10.0)
-        assert drv.has_overcurrent_warning() is False
-
-    def test_is_fault_default_false(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        # 現状ステータスフラグを解釈していないため常に False
-        self._feed(drv, torque=11.9, temp_c=90.0)
-        assert drv.is_fault() is False
+def test_encode_target_rejects_duty_mode() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    with pytest.raises(ValueError):
+        driver.encode_target(ControlMode.DUTY, 0.5)
 
 
-class TestMotorCheck:
-    """アクチュエータ動作確認 API (Phase 6 段階⑦)。"""
+@pytest.mark.parametrize(
+    ("mode", "value", "expected"),
+    [
+        (ControlMode.POSITION, 99.0, Edulite05Driver.POS_MAX),
+        (ControlMode.VELOCITY, -99.0, -2.0),
+        (ControlMode.CURRENT, 99.0, 5.0),
+    ],
+)
+def test_encode_target_clamps_to_configured_limits(
+    mode: ControlMode, value: float, expected: float
+) -> None:
+    driver = Edulite05Driver("m1", can_id=5, limit_speed=2.0, limit_current=5.0)
+    msg = driver.encode_target(mode, value)
+    assert struct.unpack("<f", msg.data[4:])[0] == pytest.approx(expected)
 
-    def _feed(
-        self,
-        drv: Edulite05Driver,
-        *,
-        position_rad: float = 0.0,
-        velocity: float = 0.0,
-        torque: float = 0.0,
-        temp_c: float = 25.0,
-    ) -> None:
-        pos_raw = Edulite05Driver.float_to_uint16(position_rad, -4 * math.pi, 4 * math.pi)
-        vel_raw = Edulite05Driver.float_to_uint16(velocity, -30.0, 30.0)
-        torque_raw = Edulite05Driver.float_to_uint16(torque, -12.0, 12.0)
-        temp_raw = int(temp_c * 10)
-        data = struct.pack(">HHHH", pos_raw, vel_raw, torque_raw, temp_raw)
-        data_area2 = (2 << 14) | (0 << 8) | drv.can_id
-        arb_id = Edulite05Driver.build_can_id(0x02, data_area2, 0x00)
-        msg = can.Message(arbitration_id=arb_id, data=data, is_extended_id=True)
-        drv.update_state(msg)
 
-    def test_check_command_targets_current_position_plus_delta(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        # 現在位置を 0.5 rad に設定 (uint16 マッピングで丸めが入るため state 側を基準に判定)
-        self._feed(drv, position_rad=0.5)
-        baseline = drv.state.position
+def test_mit_frame_clamps_command_and_uses_big_endian_words() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    msg = driver.encode_mit(99.0, -99.0, 999.0, -1.0, 99.0)
 
-        msg, context = drv.check_command(magnitude=5.0)
+    assert msg.arbitration_id == driver.build_can_id(driver.COMM_TYPE_MIT, 65535, 5)
+    assert msg.data == struct.pack(">HHHH", 65535, 0, 65535, 0)
 
-        # context["target"] = state の現在位置 + 5deg(rad)
-        expected_target = baseline + math.radians(5.0)
-        assert context["target"] == pytest.approx(expected_target)
-        assert context["magnitude_deg"] == pytest.approx(5.0)
 
-        # MIT フレームの上位 2 バイトは p_des (uint16 マッピング)
-        p_raw_actual = struct.unpack(">H", msg.data[0:2])[0]
-        p_raw_expected = Edulite05Driver.float_to_uint16(expected_target, -4 * math.pi, 4 * math.pi)
-        assert p_raw_actual == p_raw_expected
+def test_initialization_messages_apply_configuration_in_safe_order() -> None:
+    driver = Edulite05Driver(
+        "m1",
+        can_id=5,
+        mode="position",
+        limit_speed=2.0,
+        limit_current=5.0,
+        position_kp=30.0,
+        set_zero_on_start=True,
+    )
+    messages = driver.initialization_messages()
+    comm_types = [driver.parse_can_id(msg.arbitration_id)[0] for msg in messages]
 
-        # CAN ID 上位は MIT type
-        comm_type, _da2, dest = Edulite05Driver.parse_can_id(msg.arbitration_id)
-        assert comm_type == Edulite05Driver.COMM_TYPE_MIT
-        assert dest == drv.can_id
+    assert comm_types == [4, 18, 18, 18, 18, 6]
+    assert messages[1].data == struct.pack("<HxxBxxx", driver.PARAM_RUN_MODE, 1)
+    assert messages[2].data == struct.pack("<Hxxf", driver.PARAM_LIMIT_SPD, 2.0)
+    assert messages[3].data == struct.pack("<Hxxf", driver.PARAM_LIMIT_CUR, 5.0)
+    assert messages[4].data == struct.pack("<Hxxf", driver.PARAM_LOC_KP, 30.0)
 
-    def test_check_command_without_state_uses_zero_baseline(self):
-        # state が一度も届いていない場合は現在位置 0 として目標を組み立てる
-        drv = Edulite05Driver("m1", can_id=0x05)
-        _, context = drv.check_command(magnitude=5.0)
-        assert context["target"] == pytest.approx(math.radians(5.0))
+    assert [delay for _message, delay in driver.initialization_steps()] == [
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.2,
+    ]
 
-    def test_evaluate_passed_when_within_tolerance(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        self._feed(drv, position_rad=0.0)
-        _, context = drv.check_command(magnitude=5.0)
 
-        # 目標位置に到達 (誤差 0.5deg < 1.0deg)
-        target = context["target"]
-        observed_rad = target - math.radians(0.5)
-        self._feed(drv, position_rad=observed_rad)
+def test_initialization_does_not_set_zero_by_default() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    comm_types = [
+        driver.parse_can_id(msg.arbitration_id)[0]
+        for msg in driver.initialization_messages()
+    ]
+    assert driver.COMM_TYPE_SET_ZERO not in comm_types
+    assert driver.COMM_TYPE_ENABLE not in comm_types
 
-        passed, detail = drv.evaluate_check_result(drv.state, context)
-        assert passed is True
-        assert detail is None
 
-    def test_evaluate_failed_when_outside_tolerance(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        self._feed(drv, position_rad=0.0)
-        _, context = drv.check_command(magnitude=5.0)
+@pytest.mark.parametrize("limit_current", [-1.0, math.inf, math.nan])
+def test_current_limit_rejects_negative_or_non_finite_values(limit_current: float) -> None:
+    with pytest.raises(ValueError):
+        Edulite05Driver("m1", can_id=5, limit_current=limit_current)
 
-        # 許容 1deg を超える誤差 (3deg)
-        target = context["target"]
-        observed_rad = target - math.radians(3.0)
-        self._feed(drv, position_rad=observed_rad)
 
-        passed, detail = drv.evaluate_check_result(drv.state, context)
-        assert passed is False
-        assert detail is not None
-        # detail に目標と観測値が含まれること
-        assert "deg" in detail
+def test_current_limit_is_not_clamped_to_torque_range() -> None:
+    driver = Edulite05Driver("m1", can_id=5, limit_current=12.0)
+    assert driver.limit_current == 12.0
 
-    def test_evaluate_with_explicit_tolerance(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        _, context = drv.check_command(magnitude=5.0)
-        # 5deg ぴったり外れる場合に許容 10deg なら PASSED
-        observed = context["target"] - math.radians(5.0)
-        self._feed(drv, position_rad=observed)
 
-        passed, _ = drv.evaluate_check_result(drv.state, context, tolerance=math.radians(10.0))
-        assert passed is True
+def test_feedback_decode_updates_status_and_faults() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    msg = feedback_message(
+        driver,
+        position=1.0,
+        velocity=2.0,
+        torque=0.5,
+        temperature=25.0,
+        mode_state=2,
+        fault_bits=int(Edulite05Fault.OVERCURRENT | Edulite05Fault.HALL),
+    )
 
-    def test_reset_after_check_returns_disable(self):
-        drv = Edulite05Driver("m1", can_id=0x05)
-        msg = drv.reset_after_check()
-        comm_type, _, dest = Edulite05Driver.parse_can_id(msg.arbitration_id)
-        assert comm_type == Edulite05Driver.COMM_TYPE_DISABLE
-        assert dest == drv.can_id
-        assert msg.is_extended_id is True
-        assert msg.data == bytes(8)
+    state = driver.update_state(msg)
+
+    assert isinstance(state, MotorState)
+    assert state.position == pytest.approx(1.0, abs=0.01)
+    assert state.velocity == pytest.approx(2.0, abs=0.01)
+    assert state.current == pytest.approx(0.5, abs=0.01)
+    assert state.temperature == pytest.approx(25.0)
+    assert driver.mode_state == 2
+    assert driver.fault_bits == Edulite05Fault.OVERCURRENT | Edulite05Fault.HALL
+    assert driver.has_overcurrent_warning() is True
+    assert driver.is_fault() is True
+
+
+def test_torque_value_is_not_compared_with_current_limit() -> None:
+    driver = Edulite05Driver("m1", can_id=5, limit_current=1.0)
+    driver.update_state(feedback_message(driver, torque=5.0))
+    assert driver.has_overcurrent_warning() is False
+
+
+def test_matches_feedback_validates_frame_type_motor_and_host() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    valid = feedback_message(driver)
+    standard = can.Message(arbitration_id=0x205, data=valid.data, is_extended_id=False)
+    wrong_host = feedback_message(driver, host_id=0)
+    wrong_motor = Edulite05Driver("other", can_id=6)
+
+    assert driver.matches_feedback(valid) is True
+    assert driver.matches_feedback(standard) is False
+    assert driver.matches_feedback(wrong_host) is False
+    assert driver.matches_feedback(feedback_message(wrong_motor)) is False
+
+
+def test_decode_rejects_unrelated_frame() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    with pytest.raises(ValueError):
+        driver.decode_feedback(feedback_message(driver, host_id=0))
+
+
+def test_check_uses_position_parameter_and_current_position() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    driver.update_state(feedback_message(driver, position=0.5))
+    target = driver.state.position + math.radians(5.0)
+
+    msg, context = driver.check_command(magnitude=5.0)
+
+    assert msg.data == struct.pack("<Hxxf", driver.PARAM_LOC_REF, target)
+    assert context == {"target": target, "magnitude_deg": 5.0, "mode": "position"}
+
+
+def test_prepare_check_disables_configures_position_and_enables() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    messages = driver.prepare_check()
+    comm_types = [driver.parse_can_id(msg.arbitration_id)[0] for msg in messages]
+    assert comm_types == [4, 18, 18, 18, 18, 3]
+    assert [delay for _message, delay in driver.prepare_check_steps()] == [
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.1,
+    ]
+    assert messages[0].data == bytes(8)
+
+
+def test_check_safety_rejects_known_fault_and_overtemperature() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    driver.update_state(
+        feedback_message(driver, fault_bits=int(Edulite05Fault.UNDERVOLTAGE))
+    )
+    assert "fault=0x01" in driver.check_safety_error()
+
+    driver.update_state(feedback_message(driver, temperature=60.0))
+    assert "過温" in driver.check_safety_error()
+
+
+def test_emergency_stop_uses_extended_disable_without_fault_clear() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    message = driver.emergency_stop_message()
+    assert message.is_extended_id is True
+    assert driver.parse_can_id(message.arbitration_id)[0] == driver.COMM_TYPE_DISABLE
+    assert message.data == bytes(8)
+
+
+def test_evaluate_check_result_and_reset() -> None:
+    driver = Edulite05Driver("m1", can_id=5)
+    context = {"target": math.radians(5.0)}
+    passed, detail = driver.evaluate_check_result(
+        MotorState(position=math.radians(4.5)), context
+    )
+
+    assert passed is True
+    assert detail is None
+    reset = driver.reset_after_check()
+    assert reset.data == bytes(8)
+    assert driver.parse_can_id(reset.arbitration_id)[0] == driver.COMM_TYPE_DISABLE

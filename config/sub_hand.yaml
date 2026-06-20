@@ -27,7 +27,12 @@ motors:
     driver: edulite05
     bus: edulite_bus
     can_id: 2
+    host_id: 0xFD
     mode: position
+    limit_speed: 2.0
+    limit_current: 5.0
+    position_kp: 30.0
+    set_zero_on_start: false
 
   # 自作モータドライバ — 補助ハンドのグリッパ
   sub_gripper:

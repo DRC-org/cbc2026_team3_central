@@ -66,6 +66,7 @@ class MotorCheckRunner:
         motors: dict[str, MotorDriver],
         *,
         per_motor_timeout_ms: float = DEFAULT_PER_MOTOR_TIMEOUT_MS,
+        feedback_freshness_ms: float = 500.0,
         default_magnitude: dict[str, float] | None = None,
         per_motor_overrides: dict[str, dict] | None = None,
     ) -> None:
@@ -73,6 +74,7 @@ class MotorCheckRunner:
         self._can_manager = can_manager
         self._motors = motors
         self._per_motor_timeout_ms = per_motor_timeout_ms
+        self._feedback_freshness_ms = feedback_freshness_ms
         self._default_magnitude: dict[str, float] = (
             dict(DEFAULT_MAGNITUDES) if default_magnitude is None else dict(default_magnitude)
         )
@@ -80,6 +82,7 @@ class MotorCheckRunner:
 
         self._running: bool = False
         self._aborted: bool = False
+        self._abort_event = asyncio.Event()
         self._snapshot: CheckRunSnapshot = CheckRunSnapshot(
             robot=robot_name,
             started_at=0.0,
@@ -127,6 +130,7 @@ class MotorCheckRunner:
         受信があれば判定まで進み、その後 SKIPPED に切り替わる。
         """
         self._aborted = True
+        self._abort_event.set()
 
     # ------------------------------------------------------------------ #
     #  メインループ
@@ -142,6 +146,7 @@ class MotorCheckRunner:
 
         self._running = True
         self._aborted = False
+        self._abort_event.clear()
 
         now = time.time()
         # 全レコードを PENDING で初期化してから順次更新していく。
@@ -228,7 +233,34 @@ class MotorCheckRunner:
             record.detail = "未対応ドライバ種別"
             return
 
-        # 観測直前の rx タイムスタンプを記録 (これ以降の更新で「届いた」と判定する)
+        if not await self._guard_check(name, motor, record):
+            return
+
+        try:
+            prepare_steps = motor.prepare_check_steps()
+            for prepare_msg, delay_after_s in prepare_steps:
+                if not await self._guard_check(name, motor, record):
+                    return
+                await self._can_manager.send(name, prepare_msg)
+                if not await self._guard_check(name, motor, record):
+                    return
+                if not await self._wait_step_delay(delay_after_s):
+                    await self._guard_check(name, motor, record)
+                    return
+                if not await self._guard_check(name, motor, record):
+                    return
+        except can.CanError:
+            record.result = MotorCheckResult.FAILED
+            record.detail = "初期化送信失敗"
+            await self._safe_reset(name, motor)
+            return
+        except Exception as exc:
+            record.result = MotorCheckResult.FAILED
+            record.detail = f"prepare_check 例外: {exc!s}"
+            await self._safe_reset(name, motor)
+            return
+
+        # 初期化応答を動作確認の応答と誤認しないよう、指令送信直前の時刻を保存する。
         saved_rx_at = self._can_manager._last_rx_at.get(name)
 
         try:
@@ -242,12 +274,16 @@ class MotorCheckRunner:
 
         record.expected = self._extract_expected(context)
 
+        if not await self._guard_check(name, motor, record):
+            return
         try:
             await self._can_manager.send(name, msg)
         except can.CanError:
             record.result = MotorCheckResult.FAILED
             record.detail = "送信失敗"
             await self._safe_reset(name, motor)
+            return
+        if not await self._guard_check(name, motor, record):
             return
 
         # フィードバック観測ループ。タイムアウト or abort or 受信のいずれかで抜ける。
@@ -283,6 +319,53 @@ class MotorCheckRunner:
     # ------------------------------------------------------------------ #
     #  ヘルパー
     # ------------------------------------------------------------------ #
+
+    async def _guard_check(
+        self,
+        name: str,
+        motor: MotorDriver,
+        record: MotorCheckRecord,
+    ) -> bool:
+        if self._aborted:
+            record.result = MotorCheckResult.SKIPPED
+            record.detail = "動作確認中断"
+            await self._safe_reset(name, motor)
+            return False
+
+        try:
+            safety_error = motor.check_safety_error()
+        except Exception as exc:
+            safety_error = f"安全判定例外: {exc!s}"
+        if safety_error is not None:
+            record.result = MotorCheckResult.FAILED
+            record.detail = safety_error
+            await self._safe_reset(name, motor)
+            return False
+
+        if motor.requires_fresh_feedback_for_check():
+            last_rx_at = self._can_manager._last_rx_at.get(name)
+            if last_rx_at is None:
+                record.result = MotorCheckResult.FAILED
+                record.detail = "動作確認前フィードバック未受信"
+                await self._safe_reset(name, motor)
+                return False
+            age_ms = (time.time() - last_rx_at) * 1000.0
+            if age_ms > self._feedback_freshness_ms:
+                record.result = MotorCheckResult.FAILED
+                record.detail = f"動作確認前フィードバックSTALE ({age_ms:.0f}ms)"
+                await self._safe_reset(name, motor)
+                return False
+
+        return True
+
+    async def _wait_step_delay(self, delay_s: float) -> bool:
+        if delay_s <= 0:
+            return not self._aborted
+        try:
+            await asyncio.wait_for(self._abort_event.wait(), timeout=delay_s)
+        except TimeoutError:
+            return True
+        return False
 
     def _resolve_magnitude(self, motor: MotorDriver, override: dict) -> float:
         """override → ドライバ種別既定値 → クラス名既定値 → 0.0 の順で解決する。"""

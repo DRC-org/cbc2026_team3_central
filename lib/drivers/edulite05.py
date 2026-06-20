@@ -2,18 +2,37 @@ from __future__ import annotations
 
 import math
 import struct
+from enum import IntEnum, IntFlag
+from typing import ClassVar
 
 import can
 
 from lib.drivers.base import ControlMode, MotorDriver, MotorState
 
 
-class Edulite05Driver(MotorDriver):
-    """RobStride EDULITE 05 モータドライバ (CAN 2.0B Extended Frame)"""
+class Edulite05RunMode(IntEnum):
+    MIT = 0
+    POSITION = 1
+    VELOCITY = 2
+    CURRENT = 3
 
-    POS_MIN, POS_MAX = -4 * math.pi, 4 * math.pi
-    VEL_MIN, VEL_MAX = -30.0, 30.0
-    TORQUE_MIN, TORQUE_MAX = -12.0, 12.0
+
+class Edulite05Fault(IntFlag):
+    NONE = 0
+    UNDERVOLTAGE = 1
+    OVERCURRENT = 2
+    OVERTEMP = 4
+    MAG_ENCODER = 8
+    HALL = 16
+    UNCALIBRATED = 32
+
+
+class Edulite05Driver(MotorDriver):
+    """RobStride EDULITE 05 CAN 2.0B extended-frame driver."""
+
+    POS_MIN, POS_MAX = -12.57, 12.57
+    VEL_MIN, VEL_MAX = -50.0, 50.0
+    TORQUE_MIN, TORQUE_MAX = -6.0, 6.0
     KP_MIN, KP_MAX = 0.0, 500.0
     KD_MIN, KD_MAX = 0.0, 5.0
 
@@ -22,41 +41,96 @@ class Edulite05Driver(MotorDriver):
     COMM_TYPE_ENABLE = 0x03
     COMM_TYPE_DISABLE = 0x04
     COMM_TYPE_SET_ZERO = 0x06
+    COMM_TYPE_SET_ID = 0x07
+    COMM_TYPE_READ_PARAM = 0x11
+    COMM_TYPE_WRITE_PARAM = 0x12
 
-    def __init__(self, name: str, can_id: int, host_id: int = 0x00) -> None:
+    PARAM_RUN_MODE = 0x7005
+    PARAM_IQ_REF = 0x7006
+    PARAM_SPD_REF = 0x700A
+    PARAM_LIMIT_TORQUE = 0x700B
+    PARAM_LOC_REF = 0x7016
+    PARAM_LIMIT_SPD = 0x7017
+    PARAM_LIMIT_CUR = 0x7018
+    PARAM_LOC_KP = 0x701E
+
+    _CONTROL_TO_RUN_MODE: ClassVar[dict[ControlMode, Edulite05RunMode]] = {
+        ControlMode.POSITION: Edulite05RunMode.POSITION,
+        ControlMode.VELOCITY: Edulite05RunMode.VELOCITY,
+        ControlMode.CURRENT: Edulite05RunMode.CURRENT,
+    }
+    _TARGET_PARAM: ClassVar[dict[ControlMode, int]] = {
+        ControlMode.POSITION: PARAM_LOC_REF,
+        ControlMode.VELOCITY: PARAM_SPD_REF,
+        ControlMode.CURRENT: PARAM_IQ_REF,
+    }
+
+    def __init__(
+        self,
+        name: str,
+        can_id: int,
+        host_id: int = 0xFD,
+        *,
+        mode: ControlMode | str = ControlMode.POSITION,
+        limit_speed: float = 2.0,
+        limit_current: float = 5.0,
+        position_kp: float = 30.0,
+        set_zero_on_start: bool = False,
+    ) -> None:
         super().__init__(name, can_id)
-        self.host_id = host_id
+        if not 0 <= can_id <= 0xFF:
+            raise ValueError("can_id は 0..255 の範囲で指定してください")
+        if not 0 <= host_id <= 0xFF:
+            raise ValueError("host_id は 0..255 の範囲で指定してください")
 
-    # ------------------------------------------------------------------ #
-    #  静的ユーティリティ
-    # ------------------------------------------------------------------ #
+        self.host_id = host_id
+        self.mode = ControlMode(mode) if isinstance(mode, str) else mode
+        if self.mode not in self._CONTROL_TO_RUN_MODE:
+            raise ValueError(f"Edulite05Driver は {self.mode} モードをサポートしていません")
+        self.limit_speed = self._clamp(limit_speed, 0.0, self.VEL_MAX)
+        if not math.isfinite(limit_current) or limit_current < 0:
+            raise ValueError("limit_current は有限の0以上で指定してください")
+        self.limit_current = float(limit_current)
+        self.position_kp = self._clamp(position_kp, self.KP_MIN, self.KP_MAX)
+        self.set_zero_on_start = bool(set_zero_on_start)
+        self.mode_state = 0
+        self.fault_bits = Edulite05Fault.NONE
+
+    @staticmethod
+    def _clamp(value: float, min_val: float, max_val: float) -> float:
+        return min(max(float(value), min_val), max_val)
 
     @staticmethod
     def build_can_id(comm_type: int, data_area2: int, dest_id: int) -> int:
-        """29bit CAN ID を組み立てる。"""
-        return (comm_type << 24) | (data_area2 << 8) | dest_id
+        return ((comm_type & 0x1F) << 24) | ((data_area2 & 0xFFFF) << 8) | (dest_id & 0xFF)
 
     @staticmethod
     def parse_can_id(arbitration_id: int) -> tuple[int, int, int]:
-        """29bit CAN ID を (comm_type, data_area2, dest_id) にパースする。"""
-        comm_type = (arbitration_id >> 24) & 0x1F
-        data_area2 = (arbitration_id >> 8) & 0xFFFF
-        dest_id = arbitration_id & 0xFF
-        return comm_type, data_area2, dest_id
+        return (
+            (arbitration_id >> 24) & 0x1F,
+            (arbitration_id >> 8) & 0xFFFF,
+            arbitration_id & 0xFF,
+        )
 
-    @staticmethod
-    def float_to_uint16(value: float, min_val: float, max_val: float) -> int:
-        """float を uint16 にマッピング変換する。"""
-        return int((value - min_val) / (max_val - min_val) * 65535.0)
+    @classmethod
+    def float_to_uint16(cls, value: float, min_val: float, max_val: float) -> int:
+        value = cls._clamp(value, min_val, max_val)
+        return int((value - min_val) * 65535.0 / (max_val - min_val))
 
     @staticmethod
     def uint16_to_float(raw: int, min_val: float, max_val: float) -> float:
-        """uint16 を float に逆マッピング変換する。"""
-        return (raw / 65535.0) * (max_val - min_val) + min_val
+        return raw * (max_val - min_val) / 65535.0 + min_val
 
-    # ------------------------------------------------------------------ #
-    #  コマンドエンコード
-    # ------------------------------------------------------------------ #
+    def _message(
+        self, comm_type: int, data: bytes, *, data_area2: int | None = None
+    ) -> can.Message:
+        if data_area2 is None:
+            data_area2 = self.host_id
+        return can.Message(
+            arbitration_id=self.build_can_id(comm_type, data_area2, self.can_id),
+            data=data,
+            is_extended_id=True,
+        )
 
     def encode_mit(
         self,
@@ -66,47 +140,78 @@ class Edulite05Driver(MotorDriver):
         kd: float,
         torque: float,
     ) -> can.Message:
-        """MIT モード制御フレームを生成する。"""
         torque_raw = self.float_to_uint16(torque, self.TORQUE_MIN, self.TORQUE_MAX)
-        arb_id = self.build_can_id(self.COMM_TYPE_MIT, torque_raw, self.can_id)
+        data = struct.pack(
+            ">HHHH",
+            self.float_to_uint16(p_des, self.POS_MIN, self.POS_MAX),
+            self.float_to_uint16(v_des, self.VEL_MIN, self.VEL_MAX),
+            self.float_to_uint16(kp, self.KP_MIN, self.KP_MAX),
+            self.float_to_uint16(kd, self.KD_MIN, self.KD_MAX),
+        )
+        return self._message(self.COMM_TYPE_MIT, data, data_area2=torque_raw)
 
-        p_raw = self.float_to_uint16(p_des, self.POS_MIN, self.POS_MAX)
-        v_raw = self.float_to_uint16(v_des, self.VEL_MIN, self.VEL_MAX)
-        kp_raw = self.float_to_uint16(kp, self.KP_MIN, self.KP_MAX)
-        kd_raw = self.float_to_uint16(kd, self.KD_MIN, self.KD_MAX)
+    def encode_write_param_float(self, param_id: int, value: float) -> can.Message:
+        data = struct.pack("<Hxxf", param_id, float(value))
+        return self._message(self.COMM_TYPE_WRITE_PARAM, data)
 
-        data = struct.pack(">HHHH", p_raw, v_raw, kp_raw, kd_raw)
-        return can.Message(arbitration_id=arb_id, data=data, is_extended_id=True)
+    def encode_write_param_u8(self, param_id: int, value: int) -> can.Message:
+        data = struct.pack("<HxxBxxx", param_id, value)
+        return self._message(self.COMM_TYPE_WRITE_PARAM, data)
+
+    def encode_run_mode(self, mode: Edulite05RunMode | int) -> can.Message:
+        return self.encode_write_param_u8(self.PARAM_RUN_MODE, int(mode))
 
     def encode_target(self, mode: ControlMode, value: float) -> can.Message:
-        """CURRENT モードのみサポート。MIT モードで torque として送信する。"""
-        if mode is not ControlMode.CURRENT:
+        param_id = self._TARGET_PARAM.get(mode)
+        if param_id is None:
             raise ValueError(f"Edulite05Driver は {mode} モードをサポートしていません")
-        return self.encode_mit(p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, torque=value)
+        if mode is ControlMode.POSITION:
+            value = self._clamp(value, self.POS_MIN, self.POS_MAX)
+        elif mode is ControlMode.VELOCITY:
+            value = self._clamp(value, -self.limit_speed, self.limit_speed)
+        else:
+            value = self._clamp(value, -self.limit_current, self.limit_current)
+        return self.encode_write_param_float(param_id, value)
 
     def encode_enable(self) -> can.Message:
-        """モータ有効化コマンドを生成する。"""
-        arb_id = self.build_can_id(self.COMM_TYPE_ENABLE, 0x0000, self.can_id)
-        return can.Message(arbitration_id=arb_id, data=bytes(8), is_extended_id=True)
+        return self._message(self.COMM_TYPE_ENABLE, bytes(8))
 
-    def encode_disable(self) -> can.Message:
-        """モータ停止コマンドを生成する。"""
-        arb_id = self.build_can_id(self.COMM_TYPE_DISABLE, 0x0000, self.can_id)
-        return can.Message(arbitration_id=arb_id, data=bytes(8), is_extended_id=True)
+    def encode_disable(self, *, clear_fault: bool = False) -> can.Message:
+        return self._message(self.COMM_TYPE_DISABLE, bytes([int(clear_fault)]) + bytes(7))
 
     def encode_set_zero(self) -> can.Message:
-        """ゼロ点設定コマンドを生成する。"""
-        arb_id = self.build_can_id(self.COMM_TYPE_SET_ZERO, 0x0001, self.can_id)
-        return can.Message(arbitration_id=arb_id, data=bytes(8), is_extended_id=True)
+        return self._message(self.COMM_TYPE_SET_ZERO, b"\x01" + bytes(7))
 
-    # ------------------------------------------------------------------ #
-    #  フィードバック
-    # ------------------------------------------------------------------ #
+    def initialization_steps(self) -> list[tuple[can.Message, float]]:
+        steps = [
+            (self.encode_disable(), 0.05),
+            (self.encode_run_mode(self._CONTROL_TO_RUN_MODE[self.mode]), 0.05),
+            (self.encode_write_param_float(self.PARAM_LIMIT_SPD, self.limit_speed), 0.05),
+            (self.encode_write_param_float(self.PARAM_LIMIT_CUR, self.limit_current), 0.05),
+        ]
+        if self.mode is ControlMode.POSITION:
+            steps.append(
+                (self.encode_write_param_float(self.PARAM_LOC_KP, self.position_kp), 0.05)
+            )
+        if self.set_zero_on_start:
+            steps.append((self.encode_set_zero(), 0.2))
+        return steps
+
+    def initialization_messages(self) -> list[can.Message]:
+        """待機時間を除いた起動フレーム。診断・互換用途。"""
+        return [message for message, _delay in self.initialization_steps()]
 
     def decode_feedback(self, msg: can.Message) -> MotorState:
-        """フィードバックフレームをデコードして MotorState を返す。"""
-        pos_raw, vel_raw, torque_raw, temp_raw = struct.unpack(">HHHH", msg.data)
+        if not self.matches_feedback(msg):
+            raise ValueError("対象モータの EDULITE 05 フィードバックではありません")
+        if len(msg.data) != 8:
+            raise ValueError("EDULITE 05 フィードバックは 8 byte 必須です")
 
+        _comm_type, data_area2, _dest_id = self.parse_can_id(msg.arbitration_id)
+        # 参照実装準拠。mode_state の正確な bit 範囲は実機応答で要確認。
+        self.mode_state = (data_area2 >> 14) & 0x03
+        self.fault_bits = Edulite05Fault((data_area2 >> 8) & 0x3F)
+        pos_raw, vel_raw, torque_raw, temp_raw = struct.unpack(">HHHH", msg.data)
         return MotorState(
             position=self.uint16_to_float(pos_raw, self.POS_MIN, self.POS_MAX),
             velocity=self.uint16_to_float(vel_raw, self.VEL_MIN, self.VEL_MAX),
@@ -115,47 +220,62 @@ class Edulite05Driver(MotorDriver):
         )
 
     def matches_feedback(self, msg: can.Message) -> bool:
-        """受信メッセージがこのモータのフィードバックか判定する。"""
-        comm_type, data_area2, _dest_id = self.parse_can_id(msg.arbitration_id)
-        if comm_type != self.COMM_TYPE_FEEDBACK:
+        if not msg.is_extended_id or len(msg.data) != 8:
             return False
-        # data_area2 の Bit7~0 (= Bit15~8 of 29bit ID) がモータ ID
+        comm_type, data_area2, dest_id = self.parse_can_id(msg.arbitration_id)
         motor_id = data_area2 & 0xFF
-        return motor_id == self.can_id
-
-    # ------------------------------------------------------------------ #
-    #  ヘルスチェック判定
-    # ------------------------------------------------------------------ #
-    # TORQUE_MAX=12.0 N·m 直近を「過電流相当の警告」として扱う
-    # ステータスフラグ (29bit ID 内の故障コード) は段階③以降で解釈する
-    _OVERCURRENT_TORQUE_THRESHOLD = 11.0
+        return (
+            comm_type == self.COMM_TYPE_FEEDBACK
+            and motor_id == self.can_id
+            and dest_id == self.host_id
+        )
 
     def has_overcurrent_warning(self) -> bool:
-        return abs(self._state.current) >= self._OVERCURRENT_TORQUE_THRESHOLD
+        return bool(self.fault_bits & Edulite05Fault.OVERCURRENT)
 
-    # ------------------------------------------------------------------ #
-    #  動作確認 (Phase 6 段階⑦)
-    # ------------------------------------------------------------------ #
-    # 位置制御で現在位置から微小角度ぶん追加で動かし、追従性を確認する。
-    # PD ゲインは外乱に強い中域 (kp=20, kd=0.5) を採用、トルクは 0 に設定して
-    # 暴走を防ぐ。
-    _CHECK_DEFAULT_KP = 20.0
-    _CHECK_DEFAULT_KD = 0.5
+    def is_fault(self) -> bool:
+        return self.fault_bits != Edulite05Fault.NONE
+
     _CHECK_DEFAULT_TOLERANCE_DEG = 1.0
 
+    def prepare_check_steps(self) -> list[tuple[can.Message, float]]:
+        steps = [
+            (self.encode_disable(), 0.05),
+            (self.encode_run_mode(Edulite05RunMode.POSITION), 0.05),
+            (self.encode_write_param_float(self.PARAM_LIMIT_SPD, self.limit_speed), 0.05),
+            (self.encode_write_param_float(self.PARAM_LIMIT_CUR, self.limit_current), 0.05),
+            (self.encode_write_param_float(self.PARAM_LOC_KP, self.position_kp), 0.05),
+        ]
+        if self.set_zero_on_start:
+            steps.append((self.encode_set_zero(), 0.2))
+        steps.append((self.encode_enable(), 0.1))
+        return steps
+
+    def prepare_check(self) -> list[can.Message]:
+        return [message for message, _delay in self.prepare_check_steps()]
+
+    def check_safety_error(self) -> str | None:
+        if self.is_fault():
+            return f"EDULITE 05 fault=0x{int(self.fault_bits):02X}"
+        if self._state.temperature >= 60.0:
+            return f"EDULITE 05 過温 {self._state.temperature:.1f}C"
+        return None
+
+    def requires_fresh_feedback_for_check(self) -> bool:
+        return True
+
+    def emergency_stop_message(self) -> can.Message:
+        return self.encode_disable()
+
     def check_command(self, *, magnitude: float = 5.0) -> tuple[can.Message, dict]:
-        delta_rad = math.radians(magnitude)
-        # state がまだ届いていない場合 (position=0.0) は 0 基準として動作確認する
-        p_des = self._state.position + delta_rad
-        msg = self.encode_mit(
-            p_des=p_des,
-            v_des=0.0,
-            kp=self._CHECK_DEFAULT_KP,
-            kd=self._CHECK_DEFAULT_KD,
-            torque=0.0,
+        target = self._clamp(
+            self._state.position + math.radians(magnitude), self.POS_MIN, self.POS_MAX
         )
-        context = {"target": p_des, "magnitude_deg": float(magnitude)}
-        return msg, context
+        return self.encode_target(ControlMode.POSITION, target), {
+            "target": target,
+            "magnitude_deg": float(magnitude),
+            "mode": "position",
+        }
 
     def evaluate_check_result(
         self,
@@ -165,20 +285,16 @@ class Edulite05Driver(MotorDriver):
         tolerance: float | None = None,
     ) -> tuple[bool, str | None]:
         target = context["target"]
-        if tolerance is not None:
-            tol = tolerance
-        else:
-            tol = math.radians(self._CHECK_DEFAULT_TOLERANCE_DEG)
-        error = abs(state.position - target)
-
-        if error <= tol:
+        tol = (
+            tolerance
+            if tolerance is not None
+            else math.radians(self._CHECK_DEFAULT_TOLERANCE_DEG)
+        )
+        if abs(state.position - target) <= tol:
             return True, None
-
         return False, (
             f"目標 {math.degrees(target):.2f}deg, 観測 {math.degrees(state.position):.2f}deg"
         )
 
     def reset_after_check(self) -> can.Message:
-        # 動作確認前の位置を保持していないので、安全側に倒してモータを無効化する
-        # MotorCheckRunner は次のモータへ進む前にこのメッセージを必ず送る
         return self.encode_disable()

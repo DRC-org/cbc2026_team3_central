@@ -118,6 +118,15 @@ class CANManager:
         for bus_name in self._buses:
             task = asyncio.create_task(self._receive_loop(bus_name))
             self._tasks.append(task)
+        await self.initialize_motors()
+
+    async def initialize_motors(self) -> None:
+        """各モータの起動時設定を宣言順に送る。"""
+        for motor_name, motor in self._motors.items():
+            for message, delay_after_s in motor.initialization_steps():
+                await self.send(motor_name, message)
+                if delay_after_s > 0:
+                    await asyncio.sleep(delay_after_s)
 
     async def shutdown(self) -> None:
         for task in self._tasks:

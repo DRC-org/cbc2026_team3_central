@@ -1,5 +1,3 @@
-import { AlertDialog, Button, Skeleton } from "@heroui/react";
-import { Play, Square } from "lucide-react";
 import { useState } from "react";
 
 import { HealthIndicator } from "@/components/HealthIndicator";
@@ -7,6 +5,7 @@ import { MotorSummary } from "@/components/MotorSummary";
 import { SequenceProgress } from "@/components/SequenceProgress";
 import { SequenceStepList } from "@/components/SequenceStepList";
 import { TriggerButton } from "@/components/TriggerButton";
+import { TuiButton, TuiModal } from "@/components/tui";
 import { useRobot } from "@/context/RobotContext";
 
 interface RobotControlProps {
@@ -49,58 +48,58 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
   if (!state) {
     return (
       <main className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-6">
-        <div className="w-full max-w-md rounded-(--radius-card) border border-border bg-(--color-surface) p-8">
-          <p className="mb-4 text-sm font-medium text-text-muted">{label} のデータ未受信</p>
-          <div className="space-y-3">
-            <Skeleton className="h-7 w-3/4 rounded" />
-            <Skeleton className="h-12 w-1/2 rounded" />
-            <Skeleton className="h-3 w-full rounded" />
-          </div>
+        <div className="tui-window">
+          <fieldset className="tui-fieldset">
+            <legend>{label}</legend>
+            <p className="px-2 py-4 opacity-80">データ未受信 — 接続待機中...</p>
+          </fieldset>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(280px,340px)_minmax(280px,340px)] gap-4 overflow-hidden p-4 lg:p-6">
+    <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(280px,340px)_minmax(280px,340px)] gap-3 overflow-hidden p-3">
       {/* 左カラム: シーケンス概観 + コントロールバー */}
-      <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
-        <section className="shrink-0 rounded-(--radius-card) border border-border bg-(--color-surface) p-5 shadow-(--shadow-card)">
-          <SequenceProgress
-            sequence={state.sequence}
-            currentStep={state.current_step}
-            stepIndex={state.step_index}
-            totalSteps={state.total_steps}
-            waitingTrigger={state.waiting_trigger}
-            large
-          />
-        </section>
+      <div className="tui-col gap-3 overflow-hidden">
+        <div className="tui-window shrink-0">
+          <fieldset className="tui-fieldset">
+            <legend>SEQUENCE</legend>
+            <SequenceProgress
+              sequence={state.sequence}
+              currentStep={state.current_step}
+              stepIndex={state.step_index}
+              totalSteps={state.total_steps}
+              waitingTrigger={state.waiting_trigger}
+              large
+            />
+          </fieldset>
+        </div>
 
         <div className="flex-1" aria-hidden="true" />
 
-        <div className="grid shrink-0 grid-cols-[180px_1fr] gap-3">
+        {/* 開始/停止 + TriggerButton。180px 固定 + 残りで横並び。 */}
+        <div className="grid shrink-0 grid-cols-[180px_1fr] gap-3" style={{ minHeight: 88 }}>
           {showStop ? (
-            <Button
-              variant="outline"
-              size="lg"
+            <TuiButton
+              variant="danger"
+              flat
               onPress={() => setStopConfirmOpen(true)}
               aria-label="シーケンスを通常停止"
-              className="h-full! min-h-22! flex-col gap-1 rounded-[16px] text-danger!"
+              className="flex h-full w-full items-center justify-center gap-2 text-xl font-black"
             >
-              <Square size={28} strokeWidth={2.4} />
-              <span className="text-base font-bold">停止</span>
-            </Button>
+              ■ STOP
+            </TuiButton>
           ) : (
-            <Button
-              variant="outline"
-              size="lg"
+            <TuiButton
+              variant="success"
+              flat
               onPress={handleStart}
               aria-label="シーケンスを先頭から開始"
-              className="h-full! min-h-22! flex-col gap-1 rounded-[16px] bg-accent-soft! text-accent!"
+              className="flex h-full w-full items-center justify-center gap-2 text-xl font-black"
             >
-              <Play size={28} strokeWidth={2.4} />
-              <span className="text-base font-bold">開始</span>
-            </Button>
+              ► START
+            </TuiButton>
           )}
           <TriggerButton
             waiting={state.waiting_trigger}
@@ -112,49 +111,57 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
       </div>
 
       {/* 中カラム: ステップ一覧 (縦スタック) */}
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-(--radius-card) border border-border bg-(--color-surface) p-4 shadow-(--shadow-card)">
-        <SequenceStepList
-          steps={state.steps ?? []}
-          stepIndex={state.step_index}
-          waitingTrigger={state.waiting_trigger}
-          onJump={handleJump}
-        />
-      </section>
-
-      {/* 右カラム: CAN Bus + モータ */}
-      <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
-        <section className="shrink-0 rounded-(--radius-card) border border-border bg-(--color-surface) p-4 shadow-(--shadow-card)">
-          <HealthIndicator variant="bus-only" health={state.health} />
-        </section>
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-border bg-(--color-surface) p-4 shadow-(--shadow-card)">
-          <MotorSummary motors={state.motors} compact />
-        </section>
+      <div className="tui-window tui-fill overflow-hidden">
+        <fieldset className="tui-fieldset tui-fill">
+          <legend>STEPS</legend>
+          <SequenceStepList
+            steps={state.steps ?? []}
+            stepIndex={state.step_index}
+            waitingTrigger={state.waiting_trigger}
+            onJump={handleJump}
+          />
+        </fieldset>
       </div>
 
-      <AlertDialog.Backdrop isOpen={stopConfirmOpen} onOpenChange={setStopConfirmOpen}>
-        <AlertDialog.Container>
-          <AlertDialog.Dialog className="sm:max-w-105">
-            <AlertDialog.Header>
-              <AlertDialog.Icon status="warning" />
-              <AlertDialog.Heading>シーケンスを停止しますか？</AlertDialog.Heading>
-            </AlertDialog.Header>
-            <AlertDialog.Body>
-              <p>緊急停止 (EMG STOP) ではなく、通常停止です。</p>
-              <p className="mt-2 text-sm text-text-muted">
-                停止後はステップ #1 に戻り、待機状態になります。
-              </p>
-            </AlertDialog.Body>
-            <AlertDialog.Footer>
-              <Button slot="close" variant="tertiary">
-                キャンセル
-              </Button>
-              <Button slot="close" variant="danger" onPress={handleConfirmStop}>
-                停止
-              </Button>
-            </AlertDialog.Footer>
-          </AlertDialog.Dialog>
-        </AlertDialog.Container>
-      </AlertDialog.Backdrop>
+      {/* 右カラム: CAN Bus + モータ */}
+      <div className="tui-col gap-3 overflow-hidden">
+        <div className="tui-window shrink-0">
+          <fieldset className="tui-fieldset">
+            <legend>CAN BUS</legend>
+            <HealthIndicator variant="bus-only" health={state.health} />
+          </fieldset>
+        </div>
+        <div className="tui-window tui-fill flex-1 overflow-hidden">
+          <fieldset className="tui-fieldset tui-fill">
+            <legend>MOTORS</legend>
+            <MotorSummary motors={state.motors} compact />
+          </fieldset>
+        </div>
+      </div>
+
+      <TuiModal
+        isOpen={stopConfirmOpen}
+        onClose={() => setStopConfirmOpen(false)}
+        title="STOP SEQUENCE"
+        footer={
+          <div className="flex justify-end gap-2">
+            <TuiButton variant="secondary" flat onPress={() => setStopConfirmOpen(false)}>
+              キャンセル
+            </TuiButton>
+            <TuiButton variant="danger" flat onPress={handleConfirmStop}>
+              停止
+            </TuiButton>
+          </div>
+        }
+      >
+        <p className="font-bold">シーケンスを停止しますか？</p>
+        <p className="mt-2 text-sm opacity-80">
+          ⚠ 緊急停止 (EMG STOP) ではなく、通常停止です。
+        </p>
+        <p className="mt-1 text-sm opacity-80">
+          停止後はステップ #1 に戻り、待機状態になります。
+        </p>
+      </TuiModal>
     </main>
   );
 }

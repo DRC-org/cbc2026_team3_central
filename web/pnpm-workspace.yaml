@@ -1,0 +1,2 @@
+patchedDependencies:
+  react-tuicss@1.0.4: patches/react-tuicss@1.0.4.patch

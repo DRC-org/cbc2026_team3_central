@@ -83,6 +83,30 @@ class MotorDriver(abc.ABC):
     # 抽象メソッドにすると既存のテスト用 mock や派生クラスを破壊するため、
     # デフォルトは NotImplementedError raise としてサブクラスで個別に実装する
 
+    def initialization_steps(self) -> list[tuple[can.Message, float]]:
+        """起動時に送る ``(message, delay_after_seconds)``。既定は初期化不要。"""
+        return []
+
+    def prepare_check(self) -> list[can.Message]:
+        """動作確認前に順次送る初期化メッセージ。既定は初期化不要。"""
+        return []
+
+    def prepare_check_steps(self) -> list[tuple[can.Message, float]]:
+        """動作確認前のメッセージと送信後待機時間。"""
+        return [(message, 0.0) for message in self.prepare_check()]
+
+    def check_safety_error(self) -> str | None:
+        """既知の異常により動作確認できない場合、その理由を返す。"""
+        return None
+
+    def requires_fresh_feedback_for_check(self) -> bool:
+        """動作確認前と初期化中に新鮮なfeedbackを要求するか。"""
+        return False
+
+    def emergency_stop_message(self) -> can.Message | None:
+        """ドライバ固有の非常停止フレーム。共通停止だけで足りる場合は ``None``。"""
+        return None
+
     def check_command(self, *, magnitude: float) -> tuple[can.Message, dict]:
         """動作確認用の指令メッセージとコンテキストを返す。
 

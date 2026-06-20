@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import logging
 
+from lib.drivers.base import ControlMode
+from lib.drivers.edulite05 import Edulite05Driver
 from main import (
     _DEFAULT_MOTOR_CHECK,
     _collect_per_motor_overrides,
+    _create_motor,
     _load_motor_check_config,
 )
 
@@ -176,3 +179,28 @@ def test_collect_per_motor_overrides_multi_robots() -> None:
         "lift_motor": {"magnitude": 800.0},
         "gripper": {"timeout_ms": 2500.0},
     }
+
+
+def test_create_edulite_motor_applies_driver_specific_config() -> None:
+    motor = _create_motor(
+        "arm_joint",
+        {
+            "driver": "edulite05",
+            "can_id": "0x02",
+            "host_id": "0xFD",
+            "mode": "position",
+            "limit_speed": 3.0,
+            "limit_current": 4.0,
+            "position_kp": 25.0,
+            "set_zero_on_start": False,
+        },
+    )
+
+    assert isinstance(motor, Edulite05Driver)
+    assert motor.can_id == 2
+    assert motor.host_id == 0xFD
+    assert motor.mode is ControlMode.POSITION
+    assert motor.limit_speed == 3.0
+    assert motor.limit_current == 4.0
+    assert motor.position_kp == 25.0
+    assert motor.set_zero_on_start is False

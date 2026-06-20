@@ -70,6 +70,39 @@ class TestCANManager:
                 None, bus0.send, msg
             )
 
+    async def test_initialize_motors_sends_steps_with_declared_delays(self) -> None:
+        mgr = CANManager()
+        bus = _make_mock_bus()
+        motor = _make_mock_motor("m1", 1)
+        first = can.Message(arbitration_id=0x201, data=bytes(8))
+        second = can.Message(arbitration_id=0x202, data=bytes(8))
+        motor.initialization_steps.return_value = [(first, 0.05), (second, 0.1)]
+        mgr.add_bus("can0", bus)
+        mgr.add_motor("can0", motor)
+
+        with (
+            patch.object(mgr, "send", new_callable=AsyncMock) as send,
+            patch("lib.can_manager.asyncio.sleep", new_callable=AsyncMock) as sleep,
+        ):
+            await mgr.initialize_motors()
+
+        assert send.await_args_list[0].args == ("m1", first)
+        assert send.await_args_list[1].args == ("m1", second)
+        assert [call.args[0] for call in sleep.await_args_list] == [0.05, 0.1]
+
+    async def test_run_initializes_motors_after_starting_receivers(self) -> None:
+        mgr = CANManager()
+        mgr.add_bus("can0", _make_mock_bus())
+
+        with patch.object(
+            mgr, "initialize_motors", new_callable=AsyncMock
+        ) as initialize_motors:
+            await mgr.run()
+
+        initialize_motors.assert_awaited_once_with()
+        assert len(mgr._tasks) == 1
+        await mgr.shutdown()
+
     async def test_receive_updates_motor_state(self) -> None:
         mgr = CANManager()
         bus = _make_mock_bus()

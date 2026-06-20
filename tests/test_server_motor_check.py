@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import can
 from aiohttp.test_utils import TestClient, TestServer
 
 from lib.can_manager import CANManager
 from lib.drivers.base import MotorDriver, MotorState
+from lib.drivers.edulite05 import Edulite05Driver
 from lib.health import MotorCheckResult
 from lib.sequence.engine import Sequence, step
 from lib.server import RobotServer
@@ -285,6 +288,77 @@ class TestMotorCheckRecordPerMotor:
 
 
 class TestMotorCheckRejectedDuringEStop:
+    async def test_e_stop_continues_after_individual_send_failures_and_broadcasts(
+        self, caplog
+    ) -> None:
+        server = RobotServer()
+        manager = CANManager()
+        bus0 = can.Bus(interface="virtual", channel="vsrvchk_estop_fail0")
+        bus1 = can.Bus(interface="virtual", channel="vsrvchk_estop_fail1")
+        manager.add_bus("bus0", bus0)
+        manager.add_bus("bus1", bus1)
+        manager.add_motor("bus0", Edulite05Driver("arm0", can_id=5))
+        manager.add_motor("bus1", Edulite05Driver("arm1", can_id=6))
+        server.add_robot("main_hand", _DummySequence(), manager)
+
+        try:
+            with (
+                patch.object(
+                    manager,
+                    "send",
+                    new_callable=AsyncMock,
+                    side_effect=[can.CanError("driver failure"), None],
+                ) as send,
+                patch.object(
+                    manager,
+                    "send_to_bus",
+                    new_callable=AsyncMock,
+                    side_effect=[can.CanError("bus failure"), None],
+                ) as send_to_bus,
+                patch.object(
+                    server, "_broadcast_e_stop_state", new_callable=AsyncMock
+                ) as broadcast,
+                caplog.at_level(logging.ERROR),
+            ):
+                await server._handle_command({"type": "e_stop"})
+
+            assert send.await_count == 2
+            assert send_to_bus.await_count == 2
+            broadcast.assert_awaited_once_with()
+            assert "driver固有送信失敗" in caplog.text
+            assert "bus送信失敗" in caplog.text
+        finally:
+            bus0.shutdown()
+            bus1.shutdown()
+
+    async def test_e_stop_aborts_runner_and_sends_edulite_extended_disable(self) -> None:
+        server = RobotServer()
+        manager = CANManager()
+        bus = can.Bus(interface="virtual", channel="vsrvchk_edulite_estop")
+        manager.add_bus("bus0", bus)
+        motor = Edulite05Driver("arm", can_id=5)
+        manager.add_motor("bus0", motor)
+        server.add_robot("main_hand", _DummySequence(), manager)
+        runner = MagicMock(is_running=True)
+        server._motor_check_runners["main_hand"] = runner
+
+        try:
+            with (
+                patch.object(manager, "send", new_callable=AsyncMock) as send,
+                patch.object(manager, "send_to_bus", new_callable=AsyncMock),
+            ):
+                await server._handle_command({"type": "e_stop"})
+
+            runner.abort.assert_called_once_with()
+            send.assert_awaited_once()
+            motor_name, message = send.await_args.args
+            assert motor_name == "arm"
+            assert message.is_extended_id is True
+            assert motor.parse_can_id(message.arbitration_id)[0] == motor.COMM_TYPE_DISABLE
+            assert message.data == bytes(8)
+        finally:
+            bus.shutdown()
+
     async def test_motor_check_rejected_during_e_stop(self) -> None:
         # e_stop 状態で motor_check_start → motor_check_error が配信され runner 起動なし
         server, _, _, bus = _build_server_with_motors(bus_channel="vsrvchk_estop")

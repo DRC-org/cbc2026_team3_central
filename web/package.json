@@ -14,17 +14,10 @@
     "check": "pnpm lint && pnpm format:check && tsc -b --noEmit"
   },
   "dependencies": {
-    "@fontsource-variable/jetbrains-mono": "^5.2.5",
-    "@fontsource-variable/noto-sans-jp": "^5.2.5",
-    "@fontsource/inter": "^5.2.5",
-    "@heroui/react": "^3.0.3",
-    "@heroui/styles": "^3.0.3",
-    "@tailwindcss/vite": "^4.2.4",
-    "lucide-react": "^0.475.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.14.2",
-    "tailwindcss": "^4.2.4"
+    "react-tuicss": "^1.0.4"
   },
   "devDependencies": {
     "@types/node": "^24.12.2",
