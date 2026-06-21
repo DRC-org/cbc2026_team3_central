@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { Color, TuiButton } from "react-tuicss";
 
-import { TuiButton, TuiModal } from "@/components/tui";
+import { Modal } from "@/components/Modal";
 import { useRobot } from "@/context/RobotContext";
 import { useMotorCheck } from "@/hooks/useMotorCheck";
 
@@ -9,7 +10,10 @@ interface MotorCheckButtonProps {
   onPanelOpen?: () => void;
 }
 
-export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonProps) {
+export function MotorCheckButton({
+  robotName,
+  onPanelOpen,
+}: MotorCheckButtonProps) {
   const { eStopActive, connected, states } = useRobot();
   const { state, start } = useMotorCheck(robotName);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -42,46 +46,60 @@ export function MotorCheckButton({ robotName, onPanelOpen }: MotorCheckButtonPro
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
       <TuiButton
-        variant="info"
-        flat
-        isDisabled={disabled}
-        onPress={() => setConfirmOpen(true)}
+        color={Color.Cyan}
+        disabled={disabled}
+        onClick={() => setConfirmOpen(true)}
         aria-label={`${robotName} の動作確認を開始`}
       >
         {checkRunning ? "► 確認実行中..." : "▮ 動作確認"}
       </TuiButton>
       {/* Tooltip は使えないため無効化理由を等幅テキストで併記する。 */}
       {disabled && reasonLabel ? (
-        <span className="text-xs opacity-70">[?] {reasonLabel}</span>
+        <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+          [?] {reasonLabel}
+        </span>
       ) : null}
 
-      <TuiModal
+      <Modal
         isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
         title="ACTUATOR CHECK"
         footer={
-          <div className="flex justify-end gap-2">
-            <TuiButton variant="secondary" flat onPress={() => setConfirmOpen(false)}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "0.5rem",
+            }}
+          >
+            <TuiButton onClick={() => setConfirmOpen(false)}>
               キャンセル
             </TuiButton>
-            <TuiButton variant="info" flat onPress={handleConfirmStart}>
+            <TuiButton color={Color.Cyan} onClick={handleConfirmStart}>
               開始
             </TuiButton>
           </div>
         }
       >
-        <p className="font-bold">
-          <span className="info-text">{robotName}</span> の全モータを順番に微小駆動します。
+        <p style={{ fontWeight: "bold" }}>
+          <span className="info-text">{robotName}</span>{" "}
+          の全モータを順番に微小駆動します。
         </p>
-        <p className="mt-2 text-sm danger-text font-bold">
+        <p
+          className="danger-text"
+          style={{
+            marginTop: "0.5rem",
+            fontSize: "0.875rem",
+            fontWeight: "bold",
+          }}
+        >
           ⚠ 周囲の安全を確認してから開始してください。
         </p>
-        <p className="mt-1 text-sm opacity-80">
+        <p style={{ marginTop: "0.25rem", fontSize: "0.875rem", opacity: 0.8 }}>
           実行中も緊急停止 (EMG STOP) は即時優先で動作します。
         </p>
-      </TuiModal>
+      </Modal>
     </div>
   );
 }

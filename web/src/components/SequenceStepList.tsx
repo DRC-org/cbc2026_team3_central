@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Color, TuiButton } from "react-tuicss";
 
-import { TuiButton, TuiModal, cx } from "@/components/tui";
+import { Modal } from "@/components/Modal";
 import type { SequenceStepInfo } from "@/hooks/useRobotSocket";
+import { cx } from "@/lib/cx";
 
 interface SequenceStepListProps {
   steps: SequenceStepInfo[];
@@ -49,7 +51,7 @@ export function SequenceStepList({
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
 
   if (steps.length === 0) {
-    return <p className="p-2 text-sm opacity-70">ステップ情報なし</p>;
+    return <p style={{ padding: 8, fontSize: "0.875rem", opacity: 0.7 }}>ステップ情報なし</p>;
   }
 
   const totalSteps = steps.length;
@@ -68,10 +70,21 @@ export function SequenceStepList({
   const handleCancel = () => setPendingIndex(null);
 
   return (
-    <div className="tui-col flex-1" style={{ gap: 6 }}>
-      <div className="flex shrink-0 items-center justify-between">
-        <h3 className="text-xs font-bold tracking-wider opacity-80">STEP LIST</h3>
-        <span className="text-xs opacity-60">クリックで再開</span>
+    <div className="flex-1" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div
+        style={{
+          display: "flex",
+          flexShrink: 0,
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <h3
+          style={{ fontSize: "0.75rem", fontWeight: "bold", letterSpacing: "0.1em", opacity: 0.8 }}
+        >
+          STEP LIST
+        </h3>
+        <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>クリックで再開</span>
       </div>
 
       <ol className="tui-scroll flex-1" style={{ display: "flex", flexDirection: "column" }}>
@@ -86,53 +99,83 @@ export function SequenceStepList({
                 aria-current={isActive ? "step" : undefined}
                 aria-label={`ステップ ${i + 1}: ${step.label}`}
                 className={cx(
-                  "flex w-full items-center gap-2 px-2 py-1.5 text-left",
                   STEP_TONE_CLASS[kind],
-                  isActive && cx("font-bold", kind === "current" ? "info" : "warning"),
-                  kind === "waiting" && "animate-pulse",
+                  isActive && (kind === "current" ? "info" : "warning"),
                 )}
-                style={{ cursor: "pointer", border: "none", background: "transparent" }}
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 8px",
+                  textAlign: "left",
+                  // current/waiting は太字で強調（animate-pulse の代替）
+                  fontWeight: isActive ? "bold" : undefined,
+                  cursor: "pointer",
+                  border: "none",
+                  background: "transparent",
+                }}
               >
-                <span className={cx("w-4 shrink-0 text-center font-bold tabular-nums")}>
+                <span
+                  className="tabular-nums"
+                  style={{ width: "1rem", flexShrink: 0, textAlign: "center", fontWeight: "bold" }}
+                >
                   {STEP_MARKER[kind]}
                 </span>
-                <span className="w-7 shrink-0 tabular-nums opacity-80">#{i + 1}</span>
-                <span className="w-5 shrink-0 text-center">
+                <span
+                  className="tabular-nums"
+                  style={{ width: "1.75rem", flexShrink: 0, opacity: 0.8 }}
+                >
+                  #{i + 1}
+                </span>
+                <span style={{ width: "1.25rem", flexShrink: 0, textAlign: "center" }}>
                   {step.require_trigger ? "✋" : ""}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{step.label}</span>
+                <span
+                  style={{
+                    minWidth: 0,
+                    flex: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  {step.label}
+                </span>
               </button>
             </li>
           );
         })}
       </ol>
 
-      <TuiModal
+      <Modal
         isOpen={pendingIndex !== null}
-        onClose={handleCancel}
         title="STEP JUMP"
         footer={
-          <div className="flex justify-end gap-2">
-            <TuiButton variant="secondary" flat onPress={handleCancel}>
-              キャンセル
-            </TuiButton>
-            <TuiButton variant="warning" flat onPress={handleConfirm}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <TuiButton onClick={handleCancel}>キャンセル</TuiButton>
+            <TuiButton color={Color.Yellow} onClick={handleConfirm}>
               再開
             </TuiButton>
           </div>
         }
       >
-        <p className="font-bold">
+        <p style={{ fontWeight: "bold" }}>
           ステップ {pendingIndex !== null ? pendingIndex + 1 : ""}{" "}
           {target ? `「${target.label}」` : ""} から再開しますか？
         </p>
-        <p className="mt-2 text-sm opacity-80">
+        <p style={{ marginTop: 8, fontSize: "0.875rem", opacity: 0.8 }}>
           現在の動作を中断して指定ステップから実行を開始します。
         </p>
-        <p className="warning-text mt-2 text-sm font-bold">
+        <p
+          className="warning-text"
+          style={{ marginTop: 8, fontSize: "0.875rem", fontWeight: "bold" }}
+        >
           ⚠ 物理状態が安全であることを必ず確認してください。
         </p>
-      </TuiModal>
+      </Modal>
     </div>
   );
 }

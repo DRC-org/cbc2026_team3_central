@@ -15,21 +15,13 @@ function useAsciiSpinner(active: boolean): string {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(
-      () => setFrame((f) => (f + 1) % SPINNER_FRAMES.length),
-      120,
-    );
+    const id = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 120);
     return () => clearInterval(id);
   }, [active]);
   return SPINNER_FRAMES[frame];
 }
 
-export function TriggerButton({
-  waiting,
-  stepIndex,
-  totalSteps,
-  onTrigger,
-}: TriggerButtonProps) {
+export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: TriggerButtonProps) {
   // バックエンドは完走時 step_index = total_steps を返す。「最終ステップ実行中」と
   // 「全完走」を分けるため、>= total での判定を採用する
   const isComplete = totalSteps > 0 && stepIndex >= totalSteps && !waiting;
@@ -39,8 +31,17 @@ export function TriggerButton({
     return (
       <TuiButton
         disabled
+        fullWidth
         color={Color.Green}
-        className="flex h-full w-full items-center justify-center gap-3 text-2xl font-black tracking-wide"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.75rem",
+          height: "100%",
+          fontSize: "1.5rem",
+          fontWeight: 900,
+        }}
         aria-label="シーケンス完走"
       >
         ✓ DONE
@@ -51,11 +52,19 @@ export function TriggerButton({
   if (waiting) {
     return (
       <TuiButton
-        variant="primary"
-        flat
-        onPress={onTrigger}
+        color={Color.Blue}
+        fullWidth
+        onClick={onTrigger}
         aria-label="次のステップへ進む"
-        className="trigger-glow flex h-full w-full items-center justify-center gap-3 text-3xl font-black tracking-wide"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.75rem",
+          height: "100%",
+          fontSize: "1.875rem",
+          fontWeight: 900,
+        }}
       >
         ► NEXT
       </TuiButton>
@@ -64,10 +73,18 @@ export function TriggerButton({
 
   return (
     <TuiButton
-      isDisabled
-      variant="info"
-      flat
-      className="flex h-full w-full items-center justify-center gap-3 text-2xl font-black tracking-wide"
+      disabled
+      fullWidth
+      color={Color.Cyan}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.75rem",
+        height: "100%",
+        fontSize: "1.5rem",
+        fontWeight: 900,
+      }}
       aria-label="シーケンス実行中"
     >
       <span className="tabular-nums">[{spinner}]</span>

@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { Color, TuiButton } from "react-tuicss";
 
 import { MotorStatus } from "@/components/MotorStatus";
-import { TuiButton, cx } from "@/components/tui";
 import { useRobot } from "@/context/RobotContext";
 
 const PID_PARAMS = [
@@ -33,48 +33,49 @@ function PidRow({ label, max, value, onChange, onSend }: PidRowProps) {
     const next = Math.min(max, Math.max(0, val));
     return Math.round(next / STEP) * STEP;
   };
-  const fillPercent = `${(value / max) * 100}%`;
 
   return (
-    <div className="flex items-center gap-2 px-1 py-0.5">
-      <span className="w-7 shrink-0 font-bold">{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+      <span style={{ width: "1.75rem", flexShrink: 0, fontWeight: "bold" }}>
+        {label}
+      </span>
       <TuiButton
-        variant="secondary"
-        flat
         aria-label={`${label} を減らす`}
-        onPress={() => onChange(clamp(value - STEP))}
-        className="shrink-0 px-2 py-0"
+        onClick={() => onChange(clamp(value - STEP))}
       >
         ◄
       </TuiButton>
       <input
         type="range"
-        className="tui-range flex-1"
+        style={{ flex: 1 }}
         aria-label={label}
         min={0}
         max={max}
         step={STEP}
         value={value}
-        // 塗り境界をインライン変数で渡す（CSS グラデの分岐点）。
-        style={{ "--tui-range-fill": fillPercent } as React.CSSProperties}
         onChange={(e) => onChange(clamp(Number(e.target.value)))}
       />
       <TuiButton
-        variant="secondary"
-        flat
         aria-label={`${label} を増やす`}
-        onPress={() => onChange(clamp(value + STEP))}
-        className="shrink-0 px-2 py-0"
+        onClick={() => onChange(clamp(value + STEP))}
       >
         ►
       </TuiButton>
-      <span className="w-14 shrink-0 text-right font-bold tabular-nums">{value.toFixed(2)}</span>
+      <span
+        style={{
+          width: "3.5rem",
+          flexShrink: 0,
+          textAlign: "right",
+          fontWeight: "bold",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value.toFixed(2)}
+      </span>
       <TuiButton
-        variant="primary"
-        flat
+        color={Color.Blue}
         aria-label={`${label} を送信`}
-        onPress={onSend}
-        className="shrink-0 px-2 py-0 font-bold"
+        onClick={onSend}
       >
         ► SEND
       </TuiButton>
@@ -84,9 +85,12 @@ function PidRow({ label, max, value, onChange, onSend }: PidRowProps) {
 
 export function MotorTuning() {
   const { states, send } = useRobot();
-  const [values, setValues] = useState<Record<string, Record<string, number>>>({});
+  const [values, setValues] = useState<Record<string, Record<string, number>>>(
+    {},
+  );
 
-  const getValue = (motor: string, param: string) => values[motor]?.[param] ?? 0;
+  const getValue = (motor: string, param: string) =>
+    values[motor]?.[param] ?? 0;
 
   const setValue = (motor: string, param: string, val: number) => {
     setValues((prev) => ({
@@ -96,43 +100,103 @@ export function MotorTuning() {
   };
 
   const handleSend = (motor: string, param: string) => {
-    send({ type: "set_param", motor, key: param, value: getValue(motor, param) });
+    send({
+      type: "set_param",
+      motor,
+      key: param,
+      value: getValue(motor, param),
+    });
   };
 
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 md:grid-cols-2">
+    <main
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+        gap: "0.75rem",
+        minHeight: 0,
+        flex: 1,
+        overflow: "hidden",
+        padding: "0.75rem",
+      }}
+    >
       {ROBOTS.map(({ key, label }) => {
         const state = states[key];
         const motors = state ? Object.entries(state.motors) : [];
         return (
-          <div key={key} className="tui-window tui-fill overflow-hidden">
-            <fieldset className="tui-fieldset tui-fill">
+          <div
+            key={key}
+            className="tui-window"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minHeight: 0,
+              height: "100%",
+              overflow: "hidden",
+            }}
+          >
+            <fieldset
+              className="tui-fieldset"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
               <legend>{label}</legend>
 
               {!state ? (
-                <p className="px-2 py-4 opacity-80">データ未受信 — 接続待機中...</p>
+                <p style={{ padding: "1rem 0.5rem", opacity: 0.8 }}>
+                  データ未受信 — 接続待機中...
+                </p>
               ) : motors.length === 0 ? (
-                <p className="px-2 py-4 opacity-80">モータ情報なし</p>
+                <p style={{ padding: "1rem 0.5rem", opacity: 0.8 }}>
+                  モータ情報なし
+                </p>
               ) : (
                 // モータ数が増えても枠内のみスクロールさせ全体スクロールは禁止する。
-                <div className="tui-scroll tui-col flex-1 gap-3 pr-1">
+                <div
+                  className="tui-scroll"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    flex: 1,
+                    gap: "0.75rem",
+                    paddingRight: "0.25rem",
+                  }}
+                >
                   {motors.map(([motorName, motorState]) => (
-                    <fieldset key={motorName} className={cx("tui-fieldset", "mb-0")}>
+                    <fieldset
+                      key={motorName}
+                      className="tui-fieldset"
+                      style={{ marginBottom: 0 }}
+                    >
                       <legend>{motorName}</legend>
-                      <div className="mb-2">
-                        <MotorStatus name={motorName} state={motorState} compact />
+                      <div style={{ marginBottom: "0.5rem" }}>
+                        <MotorStatus name={motorName} state={motorState} />
                       </div>
-                      <div className="border-t border-white/30 pt-2">
-                        {PID_PARAMS.map(({ key: paramKey, label: paramLabel, max }) => (
-                          <PidRow
-                            key={paramKey}
-                            label={paramLabel}
-                            max={max}
-                            value={getValue(motorName, paramKey)}
-                            onChange={(val) => setValue(motorName, paramKey, val)}
-                            onSend={() => handleSend(motorName, paramKey)}
-                          />
-                        ))}
+                      <div
+                        style={{
+                          borderTop: "1px solid rgba(255,255,255,0.3)",
+                          paddingTop: "0.5rem",
+                        }}
+                      >
+                        {PID_PARAMS.map(
+                          ({ key: paramKey, label: paramLabel, max }) => (
+                            <PidRow
+                              key={paramKey}
+                              label={paramLabel}
+                              max={max}
+                              value={getValue(motorName, paramKey)}
+                              onChange={(val) =>
+                                setValue(motorName, paramKey, val)
+                              }
+                              onSend={() => handleSend(motorName, paramKey)}
+                            />
+                          ),
+                        )}
                       </div>
                     </fieldset>
                   ))}

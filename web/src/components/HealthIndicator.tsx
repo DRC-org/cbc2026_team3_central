@@ -1,4 +1,3 @@
-import { cx } from "@/components/tui";
 import type {
   BusHealth,
   BusHealthState,
@@ -62,7 +61,7 @@ function buildSummary(health: HealthSnapshot): string {
 function StatusTag({ tone, extra }: { tone: Tone; extra?: string }) {
   const style = TONE_STYLES[tone];
   return (
-    <span className={cx("whitespace-nowrap font-bold", style.textClass)}>
+    <span className={style.textClass}>
       [{style.symbol} {style.label}
       {extra ? ` ${extra}` : ""}]
     </span>
@@ -77,7 +76,7 @@ function PillMode({ health }: { health: HealthSnapshot }) {
       ? `${TONE_STYLES[tone].label}: ${summary}`
       : `${TONE_STYLES[tone].label} (バス ${health.buses.length} / モータ ${health.motors.length})`;
   return (
-    <span title={tooltip} role="status" aria-label={`ヘルス ${TONE_STYLES[tone].label}`}>
+    <span title={tooltip} aria-label={`ヘルス ${TONE_STYLES[tone].label}`}>
       <StatusTag tone={tone} />
     </span>
   );
@@ -92,18 +91,35 @@ function CompactMode({ health }: { health: HealthSnapshot }) {
 function BusRow({ bus }: { bus: BusHealth }) {
   const style = TONE_STYLES[busTone(bus.state)];
   return (
-    <div className="flex items-center justify-between gap-3 px-1 py-1">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate font-bold">{bus.name}</span>
-        <span className="text-xs opacity-60">{bus.channel}</span>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "0.75rem",
+        padding: "0.25rem",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+        <span style={{ fontWeight: "bold" }}>{bus.name}</span>
+        <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>{bus.channel}</span>
       </div>
-      <div className={cx("flex items-center gap-2 text-xs font-bold", style.textClass)}>
+      <div
+        className={style.textClass}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          fontSize: "0.75rem",
+          fontWeight: "bold",
+        }}
+      >
         <span>
           {style.symbol} {style.label}
         </span>
         {bus.bus_off ? <span>bus_off</span> : null}
         {bus.tx_error_count > 0 ? (
-          <span className="opacity-80">tx_err {bus.tx_error_count}</span>
+          <span style={{ opacity: 0.8 }}>tx_err {bus.tx_error_count}</span>
         ) : null}
       </div>
     </div>
@@ -113,12 +129,27 @@ function BusRow({ bus }: { bus: BusHealth }) {
 function MotorRow({ motor }: { motor: MotorHealth }) {
   const style = TONE_STYLES[motorTone(motor.state)];
   return (
-    <div className="flex items-center justify-between gap-3 px-1 py-1">
-      <span className="min-w-0 truncate font-bold">{motor.name}</span>
-      <div className="flex items-center gap-3 text-xs">
-        <span className="opacity-70">{formatAge(motor.feedback_age_ms)}</span>
-        <span className="opacity-70">{motor.temperature.toFixed(0)}℃</span>
-        <span className={cx("font-bold", style.textClass)}>{motor.state.toUpperCase()}</span>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "0.75rem",
+        padding: "0.25rem",
+      }}
+    >
+      <span style={{ fontWeight: "bold", minWidth: 0 }}>{motor.name}</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          fontSize: "0.75rem",
+        }}
+      >
+        <span style={{ opacity: 0.7 }}>{formatAge(motor.feedback_age_ms)}</span>
+        <span style={{ opacity: 0.7 }}>{motor.temperature.toFixed(0)}℃</span>
+        <span className={style.textClass}>{motor.state.toUpperCase()}</span>
       </div>
     </div>
   );
@@ -127,19 +158,25 @@ function MotorRow({ motor }: { motor: MotorHealth }) {
 function BusOnlyMode({ health }: { health: HealthSnapshot }) {
   const tone = busTone(health.overall);
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold tracking-wider opacity-80">CAN BUS</h3>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <h3 style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.8 }}>CAN BUS</h3>
         <StatusTag tone={tone} />
       </div>
       {health.buses.length > 0 ? (
-        <div className="flex flex-col">
+        <div style={{ display: "flex", flexDirection: "column" }}>
           {health.buses.map((bus) => (
             <BusRow key={bus.name} bus={bus} />
           ))}
         </div>
       ) : (
-        <div className="p-1 text-xs opacity-60">バス情報なし</div>
+        <div style={{ padding: "0.25rem", fontSize: "0.75rem", opacity: 0.6 }}>バス情報なし</div>
       )}
     </div>
   );
@@ -150,14 +187,27 @@ function CardMode({ health }: { health: HealthSnapshot }) {
   return (
     <fieldset className="tui-fieldset">
       <legend>CAN ヘルス</legend>
-      <div className="flex flex-col gap-3 px-1 py-1">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold">STATUS</span>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.75rem",
+          padding: "0.25rem",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span style={{ fontSize: "0.875rem", fontWeight: "bold" }}>STATUS</span>
           <StatusTag tone={tone} />
         </div>
         {health.buses.length > 0 ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-bold tracking-wider opacity-70">
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.7 }}>
               バス ({health.buses.length})
             </span>
             {health.buses.map((bus) => (
@@ -166,8 +216,8 @@ function CardMode({ health }: { health: HealthSnapshot }) {
           </div>
         ) : null}
         {health.motors.length > 0 ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-bold tracking-wider opacity-70">
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.7 }}>
               モータ ({health.motors.length})
             </span>
             {health.motors.map((motor) => (
@@ -190,16 +240,22 @@ function NeutralPlaceholder({
   }
   if (variant === "bus-only") {
     return (
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold tracking-wider opacity-80">CAN BUS</h3>
-        <span className="text-xs opacity-60">CAN ヘルス未取得</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <h3 style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.8 }}>CAN BUS</h3>
+        <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>CAN ヘルス未取得</span>
       </div>
     );
   }
   return (
     <fieldset className="tui-fieldset">
       <legend>CAN ヘルス</legend>
-      <p className="px-1 py-1 text-sm opacity-70">ヘルス情報未取得</p>
+      <p style={{ padding: "0.25rem", fontSize: "0.875rem", opacity: 0.7 }}>ヘルス情報未取得</p>
     </fieldset>
   );
 }

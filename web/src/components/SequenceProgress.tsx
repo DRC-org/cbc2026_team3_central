@@ -1,4 +1,7 @@
-import { TuiProgress, cx, type TuiColor } from "@/components/tui";
+import { TuiProgressBar } from "react-tuicss";
+
+import { cx } from "@/lib/cx";
+import { PROGRESS_BAR_VARIANT, type TuiColor } from "@/lib/tuiColor";
 
 interface SequenceProgressProps {
   sequence: string;
@@ -39,42 +42,76 @@ export function SequenceProgress({
     totalSteps === 0 ? "idle" : isComplete ? "complete" : waitingTrigger ? "waiting" : "running";
   const status = STATUS[statusKey];
 
+  const Bar = TuiProgressBar[PROGRESS_BAR_VARIANT[status.color]];
+
   return (
-    <section className="tui-col" style={{ gap: 8 }}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="text-xs opacity-70">SEQ</span>
-          <span className={cx("truncate font-bold", large ? "text-base" : "text-sm")}>
+    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", minWidth: 0, alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>SEQ</span>
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontWeight: "bold",
+              fontSize: large ? "1rem" : "0.875rem",
+            }}
+          >
             {sequence}
           </span>
         </div>
-        <span className={cx("shrink-0 whitespace-nowrap font-bold", `${status.color}-text`)}>
+        <span
+          className={cx(`${status.color}-text`)}
+          style={{ flexShrink: 0, whiteSpace: "nowrap", fontWeight: "bold" }}
+        >
           [{status.symbol} {status.label}]
         </span>
       </div>
 
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className={cx("font-bold tabular-nums", large ? "text-4xl" : "text-3xl")}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", minWidth: 0, alignItems: "baseline", gap: 8 }}>
+          <span
+            className="tabular-nums"
+            style={{ fontWeight: "bold", fontSize: large ? "2.25rem" : "1.875rem" }}
+          >
             {displayIndex}
           </span>
-          <span className="text-lg opacity-70">/ {totalSteps}</span>
+          <span style={{ fontSize: "1.125rem", opacity: 0.7 }}>/ {totalSteps}</span>
           <span
-            className={cx("ml-1 truncate font-semibold", large ? "text-base" : "text-sm")}
+            style={{
+              marginLeft: 4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontWeight: 600,
+              fontSize: large ? "1rem" : "0.875rem",
+            }}
             title={currentStep ?? undefined}
           >
             {currentStep ? `› ${currentStep}` : "—"}
           </span>
         </div>
-        <span className="shrink-0 tabular-nums font-bold opacity-90">{Math.round(percent)}%</span>
+        <span className="tabular-nums" style={{ flexShrink: 0, fontWeight: "bold", opacity: 0.9 }}>
+          {Math.round(percent)}%
+        </span>
       </div>
 
-      <TuiProgress
-        value={percent}
-        color={status.color}
-        className="w-full"
-        showLabel={false}
-      />
+      <Bar progress={percent} barWidth="100%" />
     </section>
   );
 }

@@ -1,3 +1,4 @@
+// oxlint-disable import/no-unassigned-import
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 

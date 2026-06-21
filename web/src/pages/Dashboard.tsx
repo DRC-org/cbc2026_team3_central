@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Color, TuiButton } from "react-tuicss";
 
 import { HealthIndicator } from "@/components/HealthIndicator";
 import { MotorCheckButton } from "@/components/MotorCheckButton";
 import { MotorCheckPanel } from "@/components/MotorCheckPanel";
 import { MotorSummary } from "@/components/MotorSummary";
 import { SequenceProgress } from "@/components/SequenceProgress";
-import { TuiButton, cx } from "@/components/tui";
 import { useRobot } from "@/context/RobotContext";
 import type { HealthChangeEvent } from "@/hooks/useRobotSocket";
 
@@ -23,34 +22,84 @@ interface ToastState {
 }
 
 // TUI 風通知: 等幅枠 + [!]/[X]。表示ロジック自体は従来どおり health_change を契機にする。
-function HealthToast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
+function HealthToast({
+  toast,
+  onDismiss,
+}: {
+  toast: ToastState;
+  onDismiss: () => void;
+}) {
   const isCritical = toast.event.level === "critical";
   const textClass = isCritical ? "danger-text" : "warning-text";
   return (
-    <div className="tui-window pointer-events-auto w-80 max-w-[calc(100vw-2rem)]">
+    <div
+      className="tui-window"
+      style={{
+        pointerEvents: "auto",
+        width: "20rem",
+        maxWidth: "calc(100vw - 2rem)",
+      }}
+    >
       <fieldset className="tui-fieldset">
         <legend>
-          <span className={cx("font-bold", textClass)}>
+          <span className={textClass}>
             [!] {toast.event.level.toUpperCase()}
           </span>
         </legend>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-xs opacity-80">{toast.event.robot}</div>
-            <div className="truncate text-xs opacity-80">{toast.event.target}</div>
-            <div className={cx("mt-1 font-bold", textClass)}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: "0.75rem", opacity: 0.8 }}>
+              {toast.event.robot}
+            </div>
+            <div
+              style={{
+                fontSize: "0.75rem",
+                opacity: 0.8,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {toast.event.target}
+            </div>
+            <div className={textClass}>
               {toast.event.from} → {toast.event.to}
             </div>
             {toast.event.message ? (
-              <div className="mt-1 truncate text-xs opacity-80">{toast.event.message}</div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: "0.75rem",
+                  opacity: 0.8,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {toast.event.message}
+              </div>
             ) : null}
           </div>
           <button
             type="button"
             onClick={onDismiss}
             aria-label="通知を閉じる"
-            className="shrink-0 font-bold opacity-80 hover:opacity-100"
-            style={{ background: "transparent", border: "none", cursor: "pointer", color: "inherit" }}
+            style={{
+              flexShrink: 0,
+              fontWeight: "bold",
+              opacity: 0.8,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "inherit",
+            }}
           >
             [X]
           </button>
@@ -77,24 +126,70 @@ export function Dashboard() {
   }, [healthEvents]);
 
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 md:grid-cols-2">
-      {ROBOTS.map(({ key, label, path }) => {
+    <main
+      style={{
+        display: "grid",
+        minHeight: 0,
+        flex: 1,
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: 12,
+        overflow: "hidden",
+        padding: 12,
+      }}
+    >
+      {ROBOTS.map(({ key, label }) => {
         const state = states[key];
         return (
-          <div key={key} className="tui-window tui-fill overflow-hidden">
-            <fieldset className="tui-fieldset tui-fill">
+          <div
+            key={key}
+            className="tui-window"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minHeight: 0,
+              height: "100%",
+              overflow: "hidden",
+            }}
+          >
+            <fieldset
+              className="tui-fieldset"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
               <legend>{label}</legend>
 
               {state ? (
-                <div className="tui-col gap-3 overflow-hidden">
-                  <div className="flex shrink-0 items-center justify-between gap-3">
-                    <span className="success-text text-xs font-bold">● 受信中</span>
-                    <RouterLink to={path} className="info-text font-bold no-underline">
-                      &gt; OPEN CONTROL
-                    </RouterLink>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexShrink: 0,
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <span
+                      className="success-text"
+                      style={{ fontSize: "0.75rem", fontWeight: "bold" }}
+                    >
+                      ● 受信中
+                    </span>
                   </div>
 
-                  <div className="shrink-0">
+                  <div style={{ flexShrink: 0 }}>
                     <SequenceProgress
                       sequence={state.sequence}
                       currentStep={state.current_step}
@@ -105,33 +200,63 @@ export function Dashboard() {
                     />
                   </div>
 
-                  <div className="shrink-0">
+                  <div style={{ flexShrink: 0 }}>
                     <HealthIndicator variant="card" health={state.health} />
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <div
+                    style={{
+                      display: "flex",
+                      flexShrink: 0,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
                     <MotorCheckButton
                       robotName={key}
-                      onPanelOpen={() => setPanelOpen((prev) => ({ ...prev, [key]: true }))}
+                      onPanelOpen={() =>
+                        setPanelOpen((prev) => ({ ...prev, [key]: true }))
+                      }
                     />
                     <TuiButton
-                      variant="secondary"
-                      flat
-                      onPress={() => setPanelOpen((prev) => ({ ...prev, [key]: true }))}
+                      color={Color.Yellow}
+                      onClick={() =>
+                        setPanelOpen((prev) => ({ ...prev, [key]: true }))
+                      }
                     >
                       ▤ 結果を表示
                     </TuiButton>
                   </div>
 
-                  <div className="tui-window tui-fill flex-1 overflow-hidden">
-                    <fieldset className="tui-fieldset tui-fill">
+                  <div
+                    className="tui-window"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      flex: 1,
+                      minHeight: 0,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <fieldset
+                      className="tui-fieldset"
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        flex: 1,
+                        minHeight: 0,
+                      }}
+                    >
                       <legend>MOTORS</legend>
-                      <MotorSummary motors={state.motors} compact />
+                      <MotorSummary motors={state.motors} />
                     </fieldset>
                   </div>
                 </div>
               ) : (
-                <p className="px-2 py-4 opacity-80">データ未受信 — 接続待機中...</p>
+                <p style={{ padding: "16px 8px", opacity: 0.8 }}>
+                  データ未受信 — 接続待機中...
+                </p>
               )}
             </fieldset>
           </div>
@@ -143,12 +268,27 @@ export function Dashboard() {
           key={key}
           robotName={key}
           isOpen={Boolean(panelOpen[key])}
-          onOpenChange={(open) => setPanelOpen((prev) => ({ ...prev, [key]: open }))}
+          onOpenChange={(open) =>
+            setPanelOpen((prev) => ({ ...prev, [key]: open }))
+          }
         />
       ))}
 
-      <div className="pointer-events-none fixed right-4 bottom-12 z-50 flex flex-col gap-2">
-        {toast ? <HealthToast toast={toast} onDismiss={() => setToast(null)} /> : null}
+      <div
+        style={{
+          position: "fixed",
+          right: "1rem",
+          bottom: "3rem",
+          zIndex: 50,
+          pointerEvents: "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        {toast ? (
+          <HealthToast toast={toast} onDismiss={() => setToast(null)} />
+        ) : null}
       </div>
     </main>
   );
