@@ -116,7 +116,6 @@ function MotorRow({
             width: "1rem",
             flexShrink: 0,
             textAlign: "center",
-            fontWeight: "bold",
           }}
         >
           {style.symbol}
@@ -127,12 +126,11 @@ function MotorRow({
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              fontWeight: "bold",
             }}
           >
             {record.motor}
           </span>
-          <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>
+          <span style={{ opacity: 0.6 }}>
             bus: {record.bus}
           </span>
         </div>
@@ -144,10 +142,9 @@ function MotorRow({
           flexDirection: "column",
           alignItems: "flex-end",
           gap: 2,
-          fontSize: "0.75rem",
         }}
       >
-        <span style={{ fontWeight: "bold" }}>{style.label}</span>
+        <span>{style.label}</span>
         <span style={{ opacity: 0.8 }}>{description}</span>
       </div>
     </div>
@@ -196,7 +193,7 @@ export function MotorCheckPanel({
             gap: 8,
           }}
         >
-          <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+          <span style={{ opacity: 0.7 }}>
             {footerLabel}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
@@ -231,13 +228,12 @@ export function MotorCheckPanel({
             }}
           >
             <span
-              style={{ fontSize: "0.875rem", fontWeight: "bold", opacity: 0.8 }}
+              style={{ opacity: 0.8 }}
             >
               OVERALL
             </span>
             <span
               className={cx(overallStyle.textClass)}
-              style={{ fontWeight: "bold" }}
             >
               [{overallStyle.symbol} {overallStyle.label}]
             </span>
@@ -251,7 +247,6 @@ export function MotorCheckPanel({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                fontSize: "0.75rem",
               }}
             >
               <span className="tabular-nums" style={{ opacity: 0.8 }}>
@@ -263,7 +258,6 @@ export function MotorCheckPanel({
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
-                  fontWeight: "bold",
                 }}
               >
                 {state.current ?? "—"}
@@ -274,9 +268,9 @@ export function MotorCheckPanel({
         ) : null}
 
         {isError ? (
-          <div className="danger-text" style={{ fontWeight: "bold" }}>
+          <div className="danger-text">
             <p>⚠ エラー</p>
-            <p style={{ marginTop: 4, fontSize: "0.875rem", opacity: 0.9 }}>
+            <p style={{ marginTop: 4, opacity: 0.9 }}>
               {state.error}
             </p>
           </div>
@@ -284,7 +278,7 @@ export function MotorCheckPanel({
 
         {state.records.length === 0 && !isRunning && !isError ? (
           <p
-            style={{ padding: "12px 4px", fontSize: "0.875rem", opacity: 0.7 }}
+            style={{ padding: "12px 4px", opacity: 0.7 }}
           >
             動作確認はまだ実行されていません。
           </p>

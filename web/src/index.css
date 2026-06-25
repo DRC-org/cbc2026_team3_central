@@ -2,4 +2,20 @@
   font-size: 20px;
   width: 100%;
   height: 100svh;
+  font-family: DOS, DotGothic16, monospace;
+}
+
+.symbol {
+  font-size: 0.75em;
+}
+
+.estop-title {
+  margin: 0.25rem 0;
+  animation: estop-blink 1s steps(2, start) infinite;
+}
+
+@keyframes estop-blink {
+  50% {
+    opacity: 0.35;
+  }
 }

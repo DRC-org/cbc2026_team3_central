@@ -36,7 +36,7 @@ function PidRow({ label, max, value, onChange, onSend }: PidRowProps) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-      <span style={{ width: "1.75rem", flexShrink: 0, fontWeight: "bold" }}>
+      <span style={{ width: "1.75rem", flexShrink: 0 }}>
         {label}
       </span>
       <TuiButton
@@ -66,7 +66,6 @@ function PidRow({ label, max, value, onChange, onSend }: PidRowProps) {
           width: "3.5rem",
           flexShrink: 0,
           textAlign: "right",
-          fontWeight: "bold",
           fontVariantNumeric: "tabular-nums",
         }}
       >

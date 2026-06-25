@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { TuiTabs } from "react-tuicss";
 
+import { EStopOverlay } from "@/components/EStopOverlay";
 import { RobotProvider } from "@/context/RobotContext";
 import { useRobotSocket } from "@/hooks/useRobotSocket";
 import { Dashboard } from "@/pages/Dashboard";
@@ -34,7 +35,10 @@ export function App() {
       }}
     >
       <div className="wrapper white-168">
-        <div className="tui-panel full-width center cyan-168 black-255-text tui-no-shadow">
+        <div
+          className="tui-panel full-width center cyan-168 black-255-text tui-no-shadow"
+          style={{ height: "20px" }}
+        >
           cbc2026_team3_controller
         </div>
         <TuiTabs
@@ -51,27 +55,31 @@ export function App() {
             { tabTitle: "PID Tuning", tab: <MotorTuning /> },
           ]}
         />
-        <div className="tui-statusbar cyan-168 absolute">
+        <div
+          className="tui-statusbar cyan-168 absolute"
+          style={{ height: "1.5rem" }}
+        >
           <ul>
             <li>
               {socket.connected ? (
                 <>
-                  <span className="green-255-text">●</span> Connected
+                  <span className="symbol green-255-text">●</span> Connected
                 </>
               ) : (
                 <>
-                  <span className="red-255-text">●</span> Disconnected
+                  <span className="symbol red-255-text">●</span> Disconnected
                 </>
               )}
             </li>
             {/* ToDo: 時計、電源状態 など */}
             <li className="red-255 white-255-text">
               <button onClick={onEStop}>
-                <span className="yellow-255-text">◆</span> EMG STOP
+                <span className="symbol yellow-255-text">◆</span> EMG STOP
               </button>
             </li>
           </ul>
         </div>
+        <EStopOverlay />
       </div>
     </RobotProvider>
   );

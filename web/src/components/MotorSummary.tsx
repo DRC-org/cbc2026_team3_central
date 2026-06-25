@@ -12,23 +12,20 @@ function countAnomalies(motors: Record<string, MotorState>): number {
   return Object.values(motors).filter((m) => m.temp >= TEMP_WARNING).length;
 }
 
-// 正常/異常を記号と色で表す共通ヘッダ。compact/非compact 双方で使う。
 function SummaryBadge({
   hasAnomaly,
   anomalyCount,
-  total,
 }: {
   hasAnomaly: boolean;
   anomalyCount: number;
-  total: number;
 }) {
   return (
     <span
       className={cx(hasAnomaly ? "warning-text" : "success-text")}
-      style={{ whiteSpace: "nowrap", fontWeight: "bold" }}
+      style={{ whiteSpace: "nowrap" }}
     >
       [{hasAnomaly ? "⚠" : "✓"}{" "}
-      {hasAnomaly ? `異常 ${anomalyCount} 件` : `全 ${total} 台 正常`}]
+      {hasAnomaly ? `異常 ${anomalyCount} 件` : `All operational`}]
     </span>
   );
 }
@@ -39,7 +36,7 @@ export function MotorSummary({ motors }: MotorSummaryProps) {
 
   if (total === 0) {
     return (
-      <div style={{ padding: 8, fontSize: "0.875rem", opacity: 0.7 }}>
+      <div style={{ padding: 8, opacity: 0.7 }}>
         モータ情報なし
       </div>
     );
@@ -59,19 +56,12 @@ export function MotorSummary({ motors }: MotorSummaryProps) {
       >
         <h3
           style={{
-            fontSize: "0.75rem",
-            fontWeight: "bold",
-            letterSpacing: "0.05em",
             opacity: 0.8,
           }}
         >
           MOTORS
         </h3>
-        <SummaryBadge
-          hasAnomaly={hasAnomaly}
-          anomalyCount={anomalyCount}
-          total={total}
-        />
+        <SummaryBadge hasAnomaly={hasAnomaly} anomalyCount={anomalyCount} />
       </div>
       <div className="tui-scroll" style={{ flex: 1 }}>
         <div style={{ display: "flex", flexDirection: "column" }}>

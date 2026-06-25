@@ -57,7 +57,7 @@ export function MotorCheckButton({
       </TuiButton>
       {/* Tooltip は使えないため無効化理由を等幅テキストで併記する。 */}
       {disabled && reasonLabel ? (
-        <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+        <span style={{ opacity: 0.7 }}>
           [?] {reasonLabel}
         </span>
       ) : null}
@@ -82,7 +82,7 @@ export function MotorCheckButton({
           </div>
         }
       >
-        <p style={{ fontWeight: "bold" }}>
+        <p>
           <span className="info-text">{robotName}</span>{" "}
           の全モータを順番に微小駆動します。
         </p>
@@ -90,13 +90,11 @@ export function MotorCheckButton({
           className="danger-text"
           style={{
             marginTop: "0.5rem",
-            fontSize: "0.875rem",
-            fontWeight: "bold",
           }}
         >
           ⚠ 周囲の安全を確認してから開始してください。
         </p>
-        <p style={{ marginTop: "0.25rem", fontSize: "0.875rem", opacity: 0.8 }}>
+        <p style={{ marginTop: "0.25rem", opacity: 0.8 }}>
           実行中も緊急停止 (EMG STOP) は即時優先で動作します。
         </p>
       </Modal>

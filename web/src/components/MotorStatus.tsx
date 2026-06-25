@@ -39,14 +39,13 @@ function Cell({ label, value, unit, tone = "default" }: CellProps) {
         alignItems: "flex-end",
       }}
     >
-      <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>{label}</span>
+      <span style={{ opacity: 0.6 }}>{label}</span>
       <span className={STAT_TONE_TEXT[tone]}>
         {value}
         {unit ? (
           <span
             style={{
               marginLeft: "0.125rem",
-              fontSize: "0.75rem",
               opacity: 0.7,
             }}
           >
@@ -75,7 +74,6 @@ export function MotorStatus({ name, state }: MotorStatusProps) {
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          fontWeight: "bold",
         }}
       >
         {name}

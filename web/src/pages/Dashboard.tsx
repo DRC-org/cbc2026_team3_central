@@ -1,17 +1,14 @@
 import { useEffect, useState } from "react";
-import { Color, TuiButton } from "react-tuicss";
 
 import { HealthIndicator } from "@/components/HealthIndicator";
-import { MotorCheckButton } from "@/components/MotorCheckButton";
-import { MotorCheckPanel } from "@/components/MotorCheckPanel";
 import { MotorSummary } from "@/components/MotorSummary";
 import { SequenceProgress } from "@/components/SequenceProgress";
 import { useRobot } from "@/context/RobotContext";
 import type { HealthChangeEvent } from "@/hooks/useRobotSocket";
 
 const ROBOTS = [
-  { key: "main_hand", label: "MAIN HAND", path: "/main-hand" },
-  { key: "sub_hand", label: "SUB HAND", path: "/sub-hand" },
+  { key: "main_hand", label: "Main Hand" },
+  { key: "sub_hand", label: "Sub Hand" },
 ] as const;
 
 const TOAST_VISIBLE_MS = 5000;
@@ -55,12 +52,9 @@ function HealthToast({
           }}
         >
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: "0.75rem", opacity: 0.8 }}>
-              {toast.event.robot}
-            </div>
+            <div style={{ opacity: 0.8 }}>{toast.event.robot}</div>
             <div
               style={{
-                fontSize: "0.75rem",
                 opacity: 0.8,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -76,7 +70,6 @@ function HealthToast({
               <div
                 style={{
                   marginTop: 4,
-                  fontSize: "0.75rem",
                   opacity: 0.8,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -93,7 +86,6 @@ function HealthToast({
             aria-label="通知を閉じる"
             style={{
               flexShrink: 0,
-              fontWeight: "bold",
               opacity: 0.8,
               background: "transparent",
               border: "none",
@@ -112,7 +104,6 @@ function HealthToast({
 export function Dashboard() {
   const { states, healthEvents } = useRobot();
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const latest = healthEvents[0];
@@ -126,153 +117,79 @@ export function Dashboard() {
   }, [healthEvents]);
 
   return (
-    <main
-      style={{
-        display: "grid",
-        minHeight: 0,
-        flex: 1,
-        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-        gap: 12,
-        overflow: "hidden",
-        padding: 12,
-      }}
-    >
-      {ROBOTS.map(({ key, label }) => {
-        const state = states[key];
-        return (
-          <div
-            key={key}
-            className="tui-window"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              minHeight: 0,
-              height: "100%",
-              overflow: "hidden",
-            }}
-          >
-            <fieldset
-              className="tui-fieldset"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                flex: 1,
-                minHeight: 0,
-              }}
-            >
-              <legend>{label}</legend>
+    <>
+      <table
+        className="tui-table-grid"
+        style={{
+          tableLayout: "fixed",
+          width: "calc(100% - 1rem)",
+          margin: "0.5rem",
+        }}
+      >
+        <tbody>
+          <tr>
+            {ROBOTS.map(({ key, label }) => {
+              const state = states[key];
+              return (
+                <td key={key} width="50%" className="blue-168-text">
+                  <span className="tui-shadow blue-168 white-168-text">
+                    {label}
+                  </span>
+                  <br />
+                  <br />
+                  {state ? (
+                    <>
+                      <div style={{ flexShrink: 0 }}>
+                        <SequenceProgress
+                          sequence={state.sequence}
+                          currentStep={state.current_step}
+                          stepIndex={state.step_index}
+                          totalSteps={state.total_steps}
+                          waitingTrigger={state.waiting_trigger}
+                        />
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        <HealthIndicator variant="card" health={state.health} />
+                      </div>
 
-              {state ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 12,
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexShrink: 0,
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
-                    }}
-                  >
-                    <span
-                      className="success-text"
-                      style={{ fontSize: "0.75rem", fontWeight: "bold" }}
-                    >
-                      ● 受信中
-                    </span>
-                  </div>
-
-                  <div style={{ flexShrink: 0 }}>
-                    <SequenceProgress
-                      sequence={state.sequence}
-                      currentStep={state.current_step}
-                      stepIndex={state.step_index}
-                      totalSteps={state.total_steps}
-                      waitingTrigger={state.waiting_trigger}
-                      large
-                    />
-                  </div>
-
-                  <div style={{ flexShrink: 0 }}>
-                    <HealthIndicator variant="card" health={state.health} />
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      flexShrink: 0,
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <MotorCheckButton
-                      robotName={key}
-                      onPanelOpen={() =>
-                        setPanelOpen((prev) => ({ ...prev, [key]: true }))
-                      }
-                    />
-                    <TuiButton
-                      color={Color.Yellow}
-                      onClick={() =>
-                        setPanelOpen((prev) => ({ ...prev, [key]: true }))
-                      }
-                    >
-                      ▤ 結果を表示
-                    </TuiButton>
-                  </div>
-
-                  <div
-                    className="tui-window"
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      flex: 1,
-                      minHeight: 0,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <fieldset
-                      className="tui-fieldset"
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        flex: 1,
-                        minHeight: 0,
-                      }}
-                    >
-                      <legend>MOTORS</legend>
-                      <MotorSummary motors={state.motors} />
-                    </fieldset>
-                  </div>
-                </div>
-              ) : (
-                <p style={{ padding: "16px 8px", opacity: 0.8 }}>
-                  データ未受信 — 接続待機中...
-                </p>
-              )}
-            </fieldset>
-          </div>
-        );
-      })}
-
-      {ROBOTS.map(({ key }) => (
-        <MotorCheckPanel
-          key={key}
-          robotName={key}
-          isOpen={Boolean(panelOpen[key])}
-          onOpenChange={(open) =>
-            setPanelOpen((prev) => ({ ...prev, [key]: open }))
-          }
-        />
-      ))}
+                      <div
+                        className="tui-window"
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          flex: 1,
+                          minHeight: 0,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <fieldset
+                          className="tui-fieldset"
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            flex: 1,
+                            minHeight: 0,
+                          }}
+                        >
+                          <legend>MOTORS</legend>
+                          <MotorSummary motors={state.motors} />
+                        </fieldset>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ opacity: 0.8 }}>Data not received</span>
+                      <div className="tui-progress-bar inline-block valign-middle">
+                        <span className="tui-indeterminate"></span>
+                      </div>
+                    </>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        </tbody>
+      </table>
 
       <div
         style={{
@@ -290,6 +207,6 @@ export function Dashboard() {
           <HealthToast toast={toast} onDismiss={() => setToast(null)} />
         ) : null}
       </div>
-    </main>
+    </>
   );
 }

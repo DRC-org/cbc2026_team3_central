@@ -39,8 +39,6 @@ export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: Tri
           justifyContent: "center",
           gap: "0.75rem",
           height: "100%",
-          fontSize: "1.5rem",
-          fontWeight: 900,
         }}
         aria-label="シーケンス完走"
       >
@@ -62,8 +60,6 @@ export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: Tri
           justifyContent: "center",
           gap: "0.75rem",
           height: "100%",
-          fontSize: "1.875rem",
-          fontWeight: 900,
         }}
       >
         ► NEXT
@@ -82,8 +78,6 @@ export function TriggerButton({ waiting, stepIndex, totalSteps, onTrigger }: Tri
         justifyContent: "center",
         gap: "0.75rem",
         height: "100%",
-        fontSize: "1.5rem",
-        fontWeight: 900,
       }}
       aria-label="シーケンス実行中"
     >

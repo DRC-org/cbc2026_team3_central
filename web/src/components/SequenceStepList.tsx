@@ -51,7 +51,7 @@ export function SequenceStepList({
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
 
   if (steps.length === 0) {
-    return <p style={{ padding: 8, fontSize: "0.875rem", opacity: 0.7 }}>ステップ情報なし</p>;
+    return <p style={{ padding: 8, opacity: 0.7 }}>ステップ情報なし</p>;
   }
 
   const totalSteps = steps.length;
@@ -80,11 +80,11 @@ export function SequenceStepList({
         }}
       >
         <h3
-          style={{ fontSize: "0.75rem", fontWeight: "bold", letterSpacing: "0.1em", opacity: 0.8 }}
+          style={{ opacity: 0.8 }}
         >
           STEP LIST
         </h3>
-        <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>クリックで再開</span>
+        <span style={{ opacity: 0.6 }}>クリックで再開</span>
       </div>
 
       <ol className="tui-scroll flex-1" style={{ display: "flex", flexDirection: "column" }}>
@@ -109,8 +109,6 @@ export function SequenceStepList({
                   gap: 8,
                   padding: "6px 8px",
                   textAlign: "left",
-                  // current/waiting は太字で強調（animate-pulse の代替）
-                  fontWeight: isActive ? "bold" : undefined,
                   cursor: "pointer",
                   border: "none",
                   background: "transparent",
@@ -118,7 +116,7 @@ export function SequenceStepList({
               >
                 <span
                   className="tabular-nums"
-                  style={{ width: "1rem", flexShrink: 0, textAlign: "center", fontWeight: "bold" }}
+                  style={{ width: "1rem", flexShrink: 0, textAlign: "center" }}
                 >
                   {STEP_MARKER[kind]}
                 </span>
@@ -138,8 +136,6 @@ export function SequenceStepList({
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
                   }}
                 >
                   {step.label}
@@ -162,16 +158,16 @@ export function SequenceStepList({
           </div>
         }
       >
-        <p style={{ fontWeight: "bold" }}>
+        <p>
           ステップ {pendingIndex !== null ? pendingIndex + 1 : ""}{" "}
           {target ? `「${target.label}」` : ""} から再開しますか？
         </p>
-        <p style={{ marginTop: 8, fontSize: "0.875rem", opacity: 0.8 }}>
+        <p style={{ marginTop: 8, opacity: 0.8 }}>
           現在の動作を中断して指定ステップから実行を開始します。
         </p>
         <p
           className="warning-text"
-          style={{ marginTop: 8, fontSize: "0.875rem", fontWeight: "bold" }}
+          style={{ marginTop: 8 }}
         >
           ⚠ 物理状態が安全であることを必ず確認してください。
         </p>

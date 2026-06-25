@@ -100,9 +100,16 @@ function BusRow({ bus }: { bus: BusHealth }) {
         padding: "0.25rem",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
-        <span style={{ fontWeight: "bold" }}>{bus.name}</span>
-        <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>{bus.channel}</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          minWidth: 0,
+        }}
+      >
+        <span>{bus.name}</span>
+        <span style={{ opacity: 0.6 }}>{bus.channel}</span>
       </div>
       <div
         className={style.textClass}
@@ -110,8 +117,6 @@ function BusRow({ bus }: { bus: BusHealth }) {
           display: "flex",
           alignItems: "center",
           gap: "0.5rem",
-          fontSize: "0.75rem",
-          fontWeight: "bold",
         }}
       >
         <span>
@@ -138,13 +143,12 @@ function MotorRow({ motor }: { motor: MotorHealth }) {
         padding: "0.25rem",
       }}
     >
-      <span style={{ fontWeight: "bold", minWidth: 0 }}>{motor.name}</span>
+      <span style={{ minWidth: 0 }}>{motor.name}</span>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: "0.75rem",
-          fontSize: "0.75rem",
         }}
       >
         <span style={{ opacity: 0.7 }}>{formatAge(motor.feedback_age_ms)}</span>
@@ -166,7 +170,9 @@ function BusOnlyMode({ health }: { health: HealthSnapshot }) {
           justifyContent: "space-between",
         }}
       >
-        <h3 style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.8 }}>CAN BUS</h3>
+        <h3 style={{ opacity: 0.8 }}>
+          CAN BUS
+        </h3>
         <StatusTag tone={tone} />
       </div>
       {health.buses.length > 0 ? (
@@ -176,7 +182,9 @@ function BusOnlyMode({ health }: { health: HealthSnapshot }) {
           ))}
         </div>
       ) : (
-        <div style={{ padding: "0.25rem", fontSize: "0.75rem", opacity: 0.6 }}>バス情報なし</div>
+        <div style={{ padding: "0.25rem", opacity: 0.6 }}>
+          バス情報なし
+        </div>
       )}
     </div>
   );
@@ -186,7 +194,7 @@ function CardMode({ health }: { health: HealthSnapshot }) {
   const tone = busTone(health.overall);
   return (
     <fieldset className="tui-fieldset">
-      <legend>CAN ヘルス</legend>
+      <legend>CAN Health</legend>
       <div
         style={{
           display: "flex",
@@ -202,12 +210,16 @@ function CardMode({ health }: { health: HealthSnapshot }) {
             justifyContent: "space-between",
           }}
         >
-          <span style={{ fontSize: "0.875rem", fontWeight: "bold" }}>STATUS</span>
+          <span>STATUS</span>
           <StatusTag tone={tone} />
         </div>
         {health.buses.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.7 }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}
+          >
+            <span
+              style={{ opacity: 0.7 }}
+            >
               バス ({health.buses.length})
             </span>
             {health.buses.map((bus) => (
@@ -216,8 +228,12 @@ function CardMode({ health }: { health: HealthSnapshot }) {
           </div>
         ) : null}
         {health.motors.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.7 }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}
+          >
+            <span
+              style={{ opacity: 0.7 }}
+            >
               モータ ({health.motors.length})
             </span>
             {health.motors.map((motor) => (
@@ -247,20 +263,29 @@ function NeutralPlaceholder({
           justifyContent: "space-between",
         }}
       >
-        <h3 style={{ fontSize: "0.75rem", fontWeight: "bold", opacity: 0.8 }}>CAN BUS</h3>
-        <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>CAN ヘルス未取得</span>
+        <h3 style={{ opacity: 0.8 }}>
+          CAN BUS
+        </h3>
+        <span style={{ opacity: 0.6 }}>
+          CAN ヘルス未取得
+        </span>
       </div>
     );
   }
   return (
     <fieldset className="tui-fieldset">
-      <legend>CAN ヘルス</legend>
-      <p style={{ padding: "0.25rem", fontSize: "0.875rem", opacity: 0.7 }}>ヘルス情報未取得</p>
+      <legend>CAN Health</legend>
+      <p style={{ padding: "0.25rem", opacity: 0.7 }}>
+        ヘルス情報未取得
+      </p>
     </fieldset>
   );
 }
 
-export function HealthIndicator({ health, variant = "compact" }: HealthIndicatorProps) {
+export function HealthIndicator({
+  health,
+  variant = "compact",
+}: HealthIndicatorProps) {
   if (!health) return <NeutralPlaceholder variant={variant} />;
   if (variant === "pill") return <PillMode health={health} />;
   if (variant === "compact") return <CompactMode health={health} />;

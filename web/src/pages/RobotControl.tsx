@@ -8,6 +8,8 @@ import { SequenceProgress } from "@/components/SequenceProgress";
 import { SequenceStepList } from "@/components/SequenceStepList";
 import { TriggerButton } from "@/components/TriggerButton";
 import { useRobot } from "@/context/RobotContext";
+import { MotorCheckButton } from "@/components/MotorCheckButton";
+import { MotorCheckPanel } from "@/components/MotorCheckPanel";
 
 interface RobotControlProps {
   robotKey: string;
@@ -18,6 +20,7 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
   const { states, send } = useRobot();
   const state = states[robotKey];
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const [healthCheckOpen, setHealthCheckOpen] = useState(false);
 
   const handleTrigger = () => {
     send({ type: "trigger", robot: robotKey });
@@ -104,7 +107,6 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
               stepIndex={state.step_index}
               totalSteps={state.total_steps}
               waitingTrigger={state.waiting_trigger}
-              large
             />
           </fieldset>
         </div>
@@ -127,7 +129,6 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
               fullWidth
               onClick={() => setStopConfirmOpen(true)}
               aria-label="シーケンスを通常停止"
-              style={{ fontSize: "1.25rem", fontWeight: 900 }}
             >
               ■ STOP
             </TuiButton>
@@ -137,7 +138,6 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
               fullWidth
               onClick={handleStart}
               aria-label="シーケンスを先頭から開始"
-              style={{ fontSize: "1.25rem", fontWeight: 900 }}
             >
               ► START
             </TuiButton>
@@ -222,6 +222,33 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
         </div>
       </div>
 
+      <div
+        style={{
+          display: "flex",
+          flexShrink: 0,
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <MotorCheckButton
+          robotName={robotKey}
+          onPanelOpen={() => setHealthCheckOpen(true)}
+        />
+        <TuiButton
+          color={Color.Yellow}
+          onClick={() => setHealthCheckOpen(true)}
+        >
+          ▤ 結果を表示
+        </TuiButton>
+      </div>
+
+      <MotorCheckPanel
+        robotName={robotKey}
+        isOpen={healthCheckOpen}
+        onOpenChange={(open) => setHealthCheckOpen(open)}
+      />
+
       <Modal
         isOpen={stopConfirmOpen}
         title="STOP SEQUENCE"
@@ -242,11 +269,11 @@ export function RobotControl({ robotKey, label }: RobotControlProps) {
           </div>
         }
       >
-        <p style={{ fontWeight: "bold" }}>シーケンスを停止しますか？</p>
-        <p style={{ marginTop: "0.5rem", fontSize: "0.875rem", opacity: 0.8 }}>
+        <p>シーケンスを停止しますか？</p>
+        <p style={{ marginTop: "0.5rem" }}>
           ⚠ 緊急停止 (EMG STOP) ではなく、通常停止です。
         </p>
-        <p style={{ marginTop: "0.25rem", fontSize: "0.875rem", opacity: 0.8 }}>
+        <p style={{ opacity: 0.8 }}>
           停止後はステップ #1 に戻り、待機状態になります。
         </p>
       </Modal>
